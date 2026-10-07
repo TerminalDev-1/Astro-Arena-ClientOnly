@@ -5,7 +5,7 @@ twin-stick touch controls, fighters you level up, Cups, a Cup Track, a Shop — 
 way to play**. Launch it, pick a fighter, press PLAY, and you're in a match against bots in seconds. No
 account, no matchmaking and no connection: **the whole game runs on your device**, with nothing to host.
 
-**Repository:** https://github.com/TerminalDev-1/Astro-Arena-Offline
+**Repository:** https://github.com/TerminalDev-1/Astro-Arena-Exp
 
 This is the offline edition of AstroArena: the game server is gone and everything it used to decide (what a
 match is worth, what comes out of a drop, what things cost, the shop, the Spark Pass) is done on the device by

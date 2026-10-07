@@ -68,7 +68,7 @@ import io.github.projectwip.audio.Sound
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.collectAsState
 
-const val REPO_URL = "https://github.com/TerminalDev-1/Astro-Arena-Offline"
+const val REPO_URL = "https://github.com/TerminalDev-1/Astro-Arena-Exp"
 
 private enum class Tab(val label: String) { GAMEPLAY("Gameplay"), CONTROLS("Controls"), AUDIO("Audio & Feel"), DISPLAY("Display"), DATA("Data"), DEVELOPER("Developer") }
 

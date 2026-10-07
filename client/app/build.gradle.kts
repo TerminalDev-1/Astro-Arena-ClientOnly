@@ -9,7 +9,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "io.github.projectwip"
+        applicationId = "io.github.projectwip.offline"
         minSdk = 26
         targetSdk = 35
         // Players see "Beta". The build number counts builds.
