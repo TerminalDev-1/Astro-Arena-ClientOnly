@@ -5,9 +5,9 @@ twin-stick touch controls, fighters you level up, Cups, a Cup Track, a Shop — 
 way to play**. Launch it, pick a fighter, press PLAY, and you're in a match against bots in seconds. No
 account, no matchmaking and no connection: **the whole game runs on your device**, with nothing to host.
 
-**Repository:** https://github.com/TerminalDev-1/Astro-Arena-ClientOnly
+**Repository:** https://github.com/TerminalDev-1/Astro-Arena-Offline
 
-This is the client-only edition of AstroArena: the game server is gone and everything it used to decide (what a
+This is the offline edition of AstroArena: the game server is gone and everything it used to decide (what a
 match is worth, what comes out of a drop, what things cost, the shop, the Spark Pass) is done on the device by
 [`data/Economy.kt`](client/app/src/main/java/io/github/projectwip/data/Economy.kt). There is no online play: the 1v1
 and team modes, the leaderboard and the update check needed a server or the network, and were removed.
