@@ -84,7 +84,7 @@ val TIPS = listOf(
     "Tip: your super charges as you land hits.",
     "Tip: stay out of the fight for a few seconds and you start to heal.",
     "Tip: in Last Spark, break crates for Power Cells before the storm closes in.",
-    "Tip: a top-four finish or a win earns a Spark Drop, up to three a day.",
+    "Tip: a top-four finish or a win earns a Glitch Drop, up to three a day.",
     "Tip: upgrades raise a fighter's health and damage. Power Ups pay for them.",
     "Tip: you can move every control in Settings > Controls.",
 )

@@ -19,7 +19,7 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-enum class IconKind { SPARK, CUP, BOLT, PRISM, GEAR, SHOP, FIGHTERS, TRACK, LOCK, CHECK, STAR, BACK, PLAY, GIFT, SWORDS, SKULL, PLUS, CAPSULE, CREDIT, HEART, GLORY }
+enum class IconKind { SPARK, CUP, BOLT, PRISM, GEAR, SHOP, FIGHTERS, TRACK, LOCK, CHECK, STAR, BACK, PLAY, GIFT, SWORDS, SKULL, PLUS, CAPSULE, CREDIT, HEART }
 
 /** Original vector icon set. Each icon is drawn in a 0..1 unit square with an ink outline. */
 @Composable
@@ -161,23 +161,6 @@ fun DrawScope.drawIconUnit(kind: IconKind, tint: Color?) {
                 drawRoundRect(INK, Offset(0.62f, y - 0.035f), Size(0.26f, 0.17f), androidx.compose.ui.geometry.CornerRadius(0.04f))
                 drawRoundRect(Color(0xFFE9FFF3), Offset(0.65f, y - 0.005f), Size(0.2f, 0.11f), androidx.compose.ui.geometry.CornerRadius(0.025f))
             }
-        }
-        IconKind.GLORY -> {
-            // Glory: a gold pennant-shield with a white star.
-            val shield = poly(0.5f, 0.04f, 0.9f, 0.2f, 0.9f, 0.56f, 0.5f, 0.96f, 0.1f, 0.56f, 0.1f, 0.2f)
-            drawPath(shield, Brush.verticalGradient(listOf(Color(0xFFFFF3A0), Palette.Gold, Palette.GoldDeep), 0.05f, 0.95f))
-            drawPath(poly(0.5f, 0.04f, 0.9f, 0.2f, 0.9f, 0.36f, 0.1f, 0.36f, 0.1f, 0.2f), Color.White.copy(alpha = 0.3f))
-            outline(shield)
-            val star = Path()
-            for (i in 0 until 10) {
-                val a = -PI / 2 + i * PI / 5
-                val r = if (i % 2 == 0) 0.25f else 0.11f
-                val x = 0.5f + (cos(a) * r).toFloat(); val y = 0.47f + (sin(a) * r).toFloat()
-                if (i == 0) star.moveTo(x, y) else star.lineTo(x, y)
-            }
-            star.close()
-            drawPath(star, Color.White)
-            outline(star, 0.04f)
         }
         IconKind.PRISM -> {
             val outer = poly(0.5f, 0.06f, 0.88f, 0.4f, 0.5f, 0.95f, 0.12f, 0.4f)
@@ -332,7 +315,7 @@ fun DrawScope.drawIconUnit(kind: IconKind, tint: Color?) {
 }
 
 /**
- * A Spark Drop in a unit square: a plump star in [color] with a glowing core. [glow] (0..1) adds light around it.
+ * A Glitch Drop in a unit square: a plump star in [color] with a glowing core. [glow] (0..1) adds light around it.
  */
 fun DrawScope.drawCapsuleUnit(color: Color, @Suppress("UNUSED_PARAMETER") split: Float = 0f, glow: Float = 0f) {
     val c = Offset(0.5f, 0.54f)

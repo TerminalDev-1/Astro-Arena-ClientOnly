@@ -4,10 +4,10 @@ import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.random.Random
 
-/** The shop, the Spark Pass and the day's clock as the menus show them right now. */
+/** The shop and the day's clock as the menus show them right now. */
 data class Account(
     val cups: Int,
-    /** Unopened Spark Drops. */
+    /** Unopened Glitch Drops. */
     val drops: Int,
     val dropsLeftToday: Int,
     /** The deals made with the Offer Creator that are still running. */
@@ -19,7 +19,6 @@ data class Account(
     /** When today ends and the shop changes (ms since 1970). */
     val dayEndsAt: Long,
     val giftAvailable: Boolean,
-    val pass: PassState,
 )
 
 /**
@@ -27,6 +26,11 @@ data class Account(
  * the player's save. A request the rules refuse returns null, with the reason in [lastError].
  */
 class LocalGame(private val repo: GameRepository) {
+    private companion object {
+        /** How many drops "open all" opens when drops are free and so never run out. */
+        const val FREE_BATCH = 25
+    }
+
     /** Why the last request was refused, in words for the player ("" if it wasn't). */
     @Volatile var lastError = ""
         private set
@@ -55,12 +59,6 @@ class LocalGame(private val repo: GameRepository) {
     /** Claims the Cup Track reward at [cups]. What comes back is what was actually given (owned things are paid out instead). */
     fun claimMilestone(cups: Int): Reward? = act { Economy.claimMilestone(it, cups) }
 
-    /** Claims the Spark Road fighter the Credits have covered. */
-    fun roadUnlock(): Reward? = act { Economy.roadUnlock(it) }
-
-    /** Claims the reward at Spark Pass tier [tier] (1-based). */
-    fun claimPass(tier: Int): Reward? = act { Economy.claimPass(it, tier, repo.today) }
-
     fun buyDeal(id: Long): Reward? = act { Economy.buyDeal(it, id, System.currentTimeMillis()) }
 
     /** Puts a deal in the shop (the Offer Creator). */
@@ -81,13 +79,16 @@ class LocalGame(private val repo: GameRepository) {
         return true
     }
 
-    /** Opens one Spark Drop. [luck] and [free] are the debug menu's. Null if there is none to open. */
+    /** Opens one Glitch Drop. [luck] and [free] are the Chaos Command Center's. Null if there is none to open. */
     fun openDrop(luck: Float = 0f, free: Boolean = false): CapsuleResult? =
         act { Economy.openDrops(it, luck, free, 1, Random.Default) }?.firstOrNull()
 
-    /** Opens every Spark Drop held; pieces that split off on the way are left to open next. Null if there were none. */
-    fun openAllDrops(luck: Float = 0f): List<CapsuleResult>? =
-        act { Economy.openDrops(it, luck, false, null, Random.Default) }?.takeIf { it.isNotEmpty() }
+    /**
+     * Opens every Glitch Drop held; pieces that split off on the way are left to open next. With [free] there is no
+     * count to go by, so [FREE_BATCH] are opened. Null if there were none.
+     */
+    fun openAllDrops(luck: Float = 0f, free: Boolean = false): List<CapsuleResult>? =
+        act { Economy.openDrops(it, luck, free, if (free) FREE_BATCH else null, Random.Default) }?.takeIf { it.isNotEmpty() }
 
     /** The menus' view of the shop, the pass and the clock for [save]. */
     fun account(save: SaveData): Account {
@@ -95,18 +96,12 @@ class LocalGame(private val repo: GameRepository) {
         val today = LocalDate.now(zone)
         val day = today.toEpochDay()
         val dayEndsAt = today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
-        val seasonEndsAt = LocalDate.ofEpochDay(SparkPass.endDay(day)).atStartOfDay(zone).toInstant().toEpochMilli()
         val now = System.currentTimeMillis()
-        val pass = Economy.passView(save, day)
         return Account(
             cups = save.cups, drops = save.capsules, dropsLeftToday = Progression.capsulesLeftToday(save, day),
             deals = save.customOffers.filter { !it.expired(now) },
             dailyOffers = Economy.dailyOffers(day, dayEndsAt).map { it.copy(purchased = if (Economy.boughtToday(save, it.title, day)) 1 else 0) },
             day = day, dayEndsAt = dayEndsAt, giftAvailable = save.lastDailyGiftDay != day,
-            pass = PassState(
-                season = pass.season, endsAt = seasonEndsAt, points = pass.points, tierPoints = SparkPass.TIER_POINTS, claimed = pass.claimed,
-                tiers = (1..SparkPass.TIERS).map { SparkPass.reward(it) },
-            ),
         )
     }
 }

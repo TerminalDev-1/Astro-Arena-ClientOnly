@@ -26,11 +26,11 @@ enum class BossKind { BARRAGE, SWEEPER, STAMPEDE }
  */
 enum class Rarity(val label: String, val color: Long, val roadCost: Int) {
     STARTER("Starter", 0xFF9BE7FF, 0),
-    RARE("Rare", 0xFF4ED36A, 160),
-    EPIC("Epic", 0xFFA66BFF, 420),
-    MYTHIC("Mythic", 0xFFFF4F6D, 900),
-    LEGENDARY("Legendary", 0xFFFFD23F, 1600),
-    ULTRA("Ultra", 0xFF29F0FF, 2600),
+    RARE("Rare", 0xFF4ED36A, 2500),
+    EPIC("Epic", 0xFFA66BFF, 4200),
+    MYTHIC("Mythic", 0xFFFF4F6D, 6500),
+    LEGENDARY("Legendary", 0xFFFFD23F, 9000),
+    ULTRA("Ultra", 0xFF29F0FF, 13000),
 }
 
 /** [SWARM] is a salvo of rockets fired into the sky: they come down inside one circle where the fighter aimed, over any wall, and hurt but never knock out. */

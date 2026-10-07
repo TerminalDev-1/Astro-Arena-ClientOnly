@@ -31,7 +31,7 @@ class GameRepository(private val store: SaveStore) {
         return done.value
     }
 
-    /** Settles a finished match (what it paid, its Cups and any Spark Drop) and returns what the result screen shows. */
+    /** Settles a finished match (what it paid, its Cups and any Glitch Drop) and returns what the result screen shows. */
     @Synchronized
     fun applyMatch(report: MatchReport): MatchRewards {
         val settled = Economy.settleMatch(_save.value, report, today)

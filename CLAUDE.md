@@ -3,7 +3,7 @@
 AstroArena, client-only edition (the package id is still `io.github.projectwip`, so saves carry over): original
 mobile 3D arena brawler for Android (landscape, touch, bots). Kotlin + Compose menus + custom OpenGL ES 3.0
 renderer, no engine. All art and sound is generated in code and must stay original: no Brawl Stars/Supercell
-assets, names, icons or UI copies. Fighters have first names only. Players see "Spark Drops", "Power Ups" and
+assets, names, icons or UI copies. Fighters have first names only. Players see "Glitch Drops", "Power Ups" and
 "Crystals"; the code still calls them capsules, bolts and prisms.
 
 There is no server and no network access: the app has no INTERNET permission. Everything the old Python game
@@ -31,7 +31,7 @@ server decided is done on the device (see "Game rules" below). Don't add network
 - adb is at `/c/Users/gamer/AppData/Local/Android/Sdk/platform-tools/adb`; the tablet is on wireless debugging
   (`adb mdns services`, the port changes). Set `MSYS_NO_PATHCONV=1` for `adb shell`.
 - Start a screen directly: `adb shell am start -S -n io.github.projectwip/.MainActivity --es screen match`
-  (`match|boss|train|fighters|roster|kito|varun|shop|road|pass|track|settings|result|news`; `roster` is the fighter grid with every model shown unlocked, `tryvarun` the Training Area as Varun, or `haul` to preview an "open all", or `capsule0`..`capsule5` to preview a capsule opening, suffix `s` splits into eight, `f` gives a fighter, `b` a bundle). Save file: `adb shell run-as io.github.projectwip cat files/save.json`.
+  (`match|boss|train|fighters|roster|kito|varun|shop|road|track|settings|result|news`; `roster` is the fighter grid with every model shown unlocked, `tryvarun` the Training Area as Varun, or `haul` to preview an "open all", or `capsule0`..`capsule5` to preview a capsule opening, suffix `s` splits into eight, `f` gives a fighter, `b` a bundle). Save file: `adb shell run-as io.github.projectwip cat files/save.json`.
 - UI changes must be checked with a screenshot (`adb exec-out screencap -p`) and `adb logcat -b crash -d`.
 - The tablet is the user's everyday device. Before every `input tap` or `am start`, confirm
   `dumpsys window | grep mCurrentFocus` shows `io.github.projectwip` or the home screen (`com.miui.home`): on
@@ -60,28 +60,31 @@ server decided is done on the device (see "Game rules" below). Don't add network
 
 ## Game rules (all on the device)
 
-- The save (`SaveData`, kept by `GameRepository`) is the player's whole account: Cups, Spark Drops, Bolts, Prisms,
-  Credits, Glory, fighters (unlocked, level, colourways, own Cups), Cup Track claims, the daily gift, today's
-  offers bought, the Spark Pass, and deals made with the Offer Creator.
+- The save (`SaveData`, kept by `GameRepository`) is the player's whole account: Cups, Glitch Drops, Bolts, Prisms,
+  Credits, fighters (unlocked, level, colourways, own Cups), Cup Track claims, the daily gift, today's offers bought,
+  and deals made with the Offer Creator.
 - `Economy` (pure, tested in `EconomyTest`) is the only place anything is bought, upgraded, claimed, rolled or
   settled. Each rule takes a `SaveData` and returns a `Done(newSave, value)` or throws `Refused`. `LocalGame` turns
   those into the calls the menus make, through `GameCall` (`ui/GameCall.kt`): `ask({ buy(key) }) { reward -> ... }`.
-  Menus read the shop, the pass and the clock from `rememberAccount(save)`.
+  Menus read the shop and the clock from `rememberAccount(save)`.
 - A match is played on the device and its report is its result: `GameRepository.applyMatch` settles it with
-  `Economy.settleMatch` (Bolts, Crystals, Credits, Pass points, fighter Cups, Spark Drop) and `Progression.applyMatch`
+  `Economy.settleMatch` (Bolts, Crystals, Credits, fighter Cups, Glitch Drop) and `Progression.applyMatch`
   (Cups, drop count, stats). Cups per mode are `Trophies`; they don't depend on bot difficulty. The Training Area
   pays nothing.
 - Prices and tables the menus show (`Balance.kt`, `Catalog.kt`) are the ones `Economy` charges, so there is one copy.
   A new fighter or skin needs a place on the Spark Road (`SparkRoad` in `Catalog.kt`, from rarity) and a price.
 - Fighters are unlocked on the Spark Road with Credits (or bought with Crystals): drops and the Cup Track pay
   Credits, never a fighter. Credits are not a wallet and must never be shown as one: they go straight onto the
-  road toward the next fighter along it (a fixed order; rarity decides the cost), and become Glory, a cosmetic rank, once
-  every fighter is unlocked. The Spark Pass is `SparkPass` (28-day seasons, 30 tiers of 100 points).
-- The Spark Road and Spark Pass are our own take on a familiar idea. Keep their names, art and layout original.
+  road toward the next fighter along it (a fixed order; rarity decides the cost: Rare 2,500, Epic 4,200, Mythic
+  6,500, Legendary 9,000, Ultra 13,000), and the moment the bar is full that fighter is unlocked (`Economy.grant`),
+  with the leftover carried on. Once every fighter is unlocked Credits are paid as Power Ups. There is no Glory
+  and no Spark Pass: both were removed on purpose.
+- The Spark Road is our own take on a familiar idea. Keep its names, art and layout original.
 - Days are this device's calendar days (`GameRepository.today`); the day's offers are a fixed shuffle of
   `Economy.dailyPool` by day number, and they change at local midnight.
-- Settings > Developer switches on the "D" debug menu (drop luck, free drops, upgrade cost, hand-outs) and the Offer
-  Creator. Cheats only count while that switch is on.
+- Settings > Chaos Command Center holds every tweak (drop luck, free drops, upgrade cost, no level cap, hand-outs); it
+  is always on, with no "D" button and no developer switch. The Offer Creator is in the shop's Deals row. Settings >
+  Gameplay has "Glitch Drops only": the home screen is just the Glitch Drop button, with endless drops and no fights.
 - There is no 1v1, team play, leaderboard, update check or News from a server: News is the list in `data/News.kt`.
   Add an item there when a change shows players something new.
 

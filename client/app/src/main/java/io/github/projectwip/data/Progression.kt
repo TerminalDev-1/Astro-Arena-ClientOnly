@@ -27,10 +27,9 @@ data class MatchRewards(
     val capsuleEarned: Boolean = false,
     /** Spark Capsules that can still be earned today, after this match. */
     val capsulesLeftToday: Int = 0,
-    /** Credits for the Spark Road (Glory once it is finished), and points for the Spark Pass. */
+    /** Credits for the Spark Road, and the fighters they unlocked. */
     val credits: Int = 0,
-    val passPoints: Int = 0,
-    val glory: Int = 0,
+    val unlocked: List<FighterId> = emptyList(),
     /** The Cups of the fighter that was played, before the match and what it changed them by: its rank follows them. */
     val fighterCupsBefore: Int = 0,
     val fighterCupDelta: Int = 0,
@@ -38,14 +37,14 @@ data class MatchRewards(
     val mvpCups: Int = 0,
 )
 
-/** What a match was worth (see [Economy.settleMatch]). Cups and Spark Drops are totals to adopt, not amounts to add up. */
+/** What a match was worth (see [Economy.settleMatch]). Cups and Glitch Drops are totals to adopt, not amounts to add up. */
 data class MatchVerdict(
     val cupDelta: Int,
     /** The player's Cups after this match. */
     val cups: Int,
-    /** This match earned a Spark Drop. */
+    /** This match earned a Glitch Drop. */
     val drop: Boolean,
-    /** Unopened Spark Drops after this match. */
+    /** Unopened Glitch Drops after this match. */
     val drops: Int,
     val dropsLeftToday: Int,
     /** Bolts this match paid. */
@@ -53,8 +52,7 @@ data class MatchVerdict(
     /** Prisms for the first win of the day (0 if this wasn't it). */
     val firstWinPrisms: Int = 0,
     val credits: Int = 0,
-    val passPoints: Int = 0,
-    val glory: Int = 0,
+    val unlocked: List<FighterId> = emptyList(),
     /** The Cups of the fighter that was played, before and after this match. */
     val fighterCupsBefore: Int = 0,
     val fighterCups: Int = 0,
@@ -71,7 +69,7 @@ data class StatPreview(val label: String, val current: Int, val next: Int?, val 
 object Progression {
 
     /**
-     * Records a finished match. Cups and Spark Drops come from the [verdict] ([Economy.settleMatch] has already put
+     * Records a finished match. Cups and Glitch Drops come from the [verdict] ([Economy.settleMatch] has already put
      * the Bolts, Crystals and Credits it paid into [save]).
      */
     fun applyMatch(save: SaveData, report: MatchReport, today: Long, verdict: MatchVerdict): Pair<SaveData, MatchRewards> {
@@ -89,7 +87,7 @@ object Progression {
             victories = save.victories + if (report.outcome == MatchOutcome.VICTORY) 1 else 0,
             totalKos = save.totalKos + report.kos,
         )
-        val rewards = MatchRewards(newCups - cupDelta, cupDelta, verdict.bolts, verdict.firstWinPrisms, reached, verdict.drop, leftToday, credits = verdict.credits, passPoints = verdict.passPoints, glory = verdict.glory,
+        val rewards = MatchRewards(newCups - cupDelta, cupDelta, verdict.bolts, verdict.firstWinPrisms, reached, verdict.drop, leftToday, credits = verdict.credits, unlocked = verdict.unlocked,
             fighterCupsBefore = verdict.fighterCupsBefore, fighterCupDelta = verdict.fighterCups - verdict.fighterCupsBefore, mvpCups = verdict.mvpCups)
         return next to rewards
     }

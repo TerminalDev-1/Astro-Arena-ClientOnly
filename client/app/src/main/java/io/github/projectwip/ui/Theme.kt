@@ -78,14 +78,12 @@ val LocalSfx = staticCompositionLocalOf<Sfx?> { null }
 /** The game the menus ask to buy, upgrade, claim and open. */
 val LocalPlay = staticCompositionLocalOf<io.github.projectwip.data.LocalGame> { error("No LocalGame provided") }
 
-/** The shop, the Spark Pass and the day's clock for [save]. */
+/** The shop and the day's clock for [save]. */
 @Composable
 fun rememberAccount(save: io.github.projectwip.data.SaveData): io.github.projectwip.data.Account {
     val game = LocalPlay.current
     return remember(save) { game.account(save) }
 }
 
-/** True when the debug menu is on offer: it is, in Settings > Developer. */
-val LocalDev = staticCompositionLocalOf { false }
 /** The persistent 3D lobby behind the menus; screens tell it what to show. */
 val LocalLobby = staticCompositionLocalOf { io.github.projectwip.render3d.LobbyParams() }

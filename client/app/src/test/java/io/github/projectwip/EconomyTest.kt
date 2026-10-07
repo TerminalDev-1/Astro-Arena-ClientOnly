@@ -18,7 +18,6 @@ import io.github.projectwip.data.Reward
 import io.github.projectwip.data.SaveData
 import io.github.projectwip.data.Shop
 import io.github.projectwip.data.SparkCapsules
-import io.github.projectwip.data.SparkPass
 import io.github.projectwip.data.SparkRoad
 import io.github.projectwip.data.Trophies
 import org.junit.Assert.assertEquals
@@ -80,26 +79,37 @@ class EconomyTest {
         assertEquals(s.prisms + 30, twice.save.prisms)
     }
 
-    @Test fun creditsFillTheRoadAndBecomeGloryOnceItIsFinished() {
+    @Test fun creditsFillTheRoadAndTheFighterUnlocksTheMomentItIsFull() {
         val first = SparkRoad.steps.first()
-        assertEquals(Reward.Credits(10), Economy.grant(SaveData(), Reward.Credits(10)).value)
-        refused(402) { Economy.roadUnlock(SaveData(credits = first.cost - 1)) }
-        val unlocked = Economy.roadUnlock(SaveData(credits = first.cost + 7))
-        assertEquals(Reward.UnlockFighter(first.fighter), unlocked.value)
-        assertTrue(unlocked.save.progress(first.fighter).unlocked)
-        assertEquals("what is left stays on the road", 7, unlocked.save.credits)
-        // Everyone unlocked: the road is finished, and Credits are Glory from then on.
-        val all = SaveData(fighters = FighterId.entries.associateWith { FighterProgress(unlocked = true) })
-        refused(409) { Economy.roadUnlock(all) }
-        val glory = Economy.grant(all, Reward.Credits(40))
-        assertEquals(Reward.Glory(40), glory.value)
-        assertEquals(40, glory.save.glory)
-        assertEquals(0, glory.save.credits)
-        // Unlocking the last fighter turns the credits left over into Glory.
+        assertEquals("the road's prices", listOf(2500, 4200, 6500, 9000), SparkRoad.steps.map { it.cost })
+        // Not enough yet: the Credits just sit on the road.
+        val some = Economy.grant(SaveData(), Reward.Credits(first.cost - 1))
+        assertEquals(Reward.Credits(first.cost - 1), some.value)
+        assertEquals(first.cost - 1, some.save.credits)
+        assertFalse(some.save.progress(first.fighter).unlocked)
+        // One more and the fighter is theirs, on the spot, with the leftover carried on toward the next.
+        val full = Economy.grant(some.save, Reward.Credits(8))
+        assertTrue(full.save.progress(first.fighter).unlocked)
+        assertEquals(7, full.save.credits)
+        assertEquals(listOf(first.fighter), Economy.fightersIn(full.value))
+        assertEquals(8, Economy.creditsIn(full.value))
+        // A big grant can unlock several in a row.
+        val two = Economy.grant(SaveData(), Reward.Credits(SparkRoad.steps[0].cost + SparkRoad.steps[1].cost + 3))
+        assertEquals(SparkRoad.steps.take(2).map { it.fighter }, Economy.fightersIn(two.value))
+        assertEquals(3, two.save.credits)
+        // Unlocking the last fighter pays the leftovers out as Power Ups, and so does everything after it.
         val lastStep = SparkRoad.steps.last()
-        val nearly = SaveData(credits = lastStep.cost + 25, fighters = FighterId.entries.associateWith { FighterProgress(unlocked = it != lastStep.fighter) })
-        val finished = Economy.roadUnlock(nearly)
-        assertEquals(0 to 25, finished.save.credits to finished.save.glory)
+        val nearly = SaveData(credits = lastStep.cost - 5, fighters = FighterId.entries.associateWith { FighterProgress(unlocked = it != lastStep.fighter) })
+        val finished = Economy.grant(nearly, Reward.Credits(30))
+        assertEquals(0 to nearly.bolts + 25, finished.save.credits to finished.save.bolts)
+        assertEquals(null, SparkRoad.next(finished.save))
+        val all = SaveData(fighters = FighterId.entries.associateWith { FighterProgress(unlocked = true) })
+        val after = Economy.grant(all, Reward.Credits(40))
+        assertEquals(Reward.Bolts(40), after.value)
+        assertEquals(all.bolts + 40, after.save.bolts)
+        assertEquals(0, after.save.credits)
+        // A gift of Credits (the Cup Track, a drop, the debug menu) fills the road in the same way.
+        assertTrue(Economy.devGrant(SaveData(), credits = first.cost).progress(first.fighter).unlocked)
     }
 
     // ---------------------------------------------------------------- the shop
@@ -143,30 +153,6 @@ class EconomyTest {
     }
 
     // ---------------------------------------------------------------- the Spark Pass
-
-    @Test fun theSparkPassFillsClaimsAndStartsAgainEachSeason() {
-        val day = 100L
-        var s = Economy.addPassPoints(SaveData(), 250, day)
-        assertEquals(250, Economy.passView(s, day).points)
-        refused(409) { Economy.claimPass(s, 3, day) }
-        refused(404) { Economy.claimPass(s, 0, day) }
-        val claimed = Economy.claimPass(s, 2, day)
-        assertEquals(SparkPass.reward(2), claimed.value)
-        refused(409) { Economy.claimPass(claimed.save, 2, day) }
-        assertEquals(setOf(2), Economy.passView(claimed.save, day).claimed)
-        // The next season starts from nothing.
-        val later = day + SparkPass.SEASON_DAYS
-        assertEquals(0, Economy.passView(claimed.save, later).points)
-        assertEquals(emptySet<Int>(), Economy.passView(claimed.save, later).claimed)
-        // Points stop at the top tier.
-        s = Economy.addPassPoints(s, 1_000_000, day)
-        assertEquals(SparkPass.TIERS * SparkPass.TIER_POINTS, s.passPoints)
-        assertEquals(SparkPass.endDay(day), (SparkPass.season(day) + 1) * SparkPass.SEASON_DAYS)
-        assertEquals(Reward.Credits(150), SparkPass.reward(10))
-        assertEquals(Reward.Prisms(30), SparkPass.reward(5))
-        assertEquals(Reward.Credits(30), SparkPass.reward(1))
-        assertEquals(Reward.Bolts(240), SparkPass.reward(2))
-    }
 
     // ---------------------------------------------------------------- deals and daily offers
 
@@ -245,8 +231,6 @@ class EconomyTest {
         assertEquals(6, Economy.matchCredits(GameMode.LAST_SPARK, MatchOutcome.DEFEAT, 4))
         assertEquals(2, Economy.matchCredits(GameMode.LAST_SPARK, MatchOutcome.DEFEAT, 5))
         assertEquals(1, Economy.matchCredits(GameMode.BOSS, MatchOutcome.DEFEAT, 0))
-        assertEquals(40, Economy.passPoints(GameMode.KNOCKOUT_RUSH, MatchOutcome.VICTORY, 0))
-        assertEquals(8, Economy.passPoints(GameMode.BOSS, MatchOutcome.DEFEAT, 0))
         assertTrue(Economy.earnsDrop(GameMode.LAST_SPARK, MatchOutcome.DEFEAT, 4))
         assertFalse(Economy.earnsDrop(GameMode.LAST_SPARK, MatchOutcome.VICTORY, 5))
         assertTrue(Economy.earnsDrop(GameMode.KNOCKOUT_RUSH, MatchOutcome.VICTORY, 0))
@@ -267,13 +251,11 @@ class EconomyTest {
         assertEquals(28, v.bolts)
         assertEquals(10, v.firstWinPrisms)
         assertEquals(6, v.credits)
-        assertEquals(40, v.passPoints)
         assertEquals(0 to 10, v.fighterCupsBefore to v.fighterCups)
         assertEquals(before.bolts + 28, done.save.bolts)
         assertEquals(before.prisms + 10, done.save.prisms)
         assertEquals(day, done.save.lastFirstWinDay)
         assertEquals(6, done.save.credits)
-        assertEquals(40, Economy.passView(done.save, day).points)
         assertEquals(10, done.save.progress(FighterId.BYTE).cups)
         // The same day's second win pays no first-win Crystals.
         assertEquals(0, Economy.settleMatch(done.save, report(GameMode.KNOCKOUT_RUSH, MatchOutcome.VICTORY), day).value.firstWinPrisms)
@@ -305,7 +287,7 @@ class EconomyTest {
         assertEquals("a lost fighter's Cups follow the player's", 0, veteran.save.progress(FighterId.BYTE).cups)
     }
 
-    // ---------------------------------------------------------------- Spark Drops
+    // ---------------------------------------------------------------- Glitch Drops
 
     @Test fun dropsAreOpenedOneByOneAndAddTheirRewardToTheSave() {
         val s = SaveData(capsules = 3)
@@ -340,16 +322,23 @@ class EconomyTest {
     }
 
     @Test fun aDropNeverGivesAColourwayAlreadyOwnedAndSkinsNeedTheFighter() {
-        // Only Byte is unlocked, so only Byte's two other colourways can come out as skins.
-        val seen = HashSet<Reward.SkinReward>()
-        var s = SaveData(capsules = 3000)
-        val results = Economy.openDrops(s, SparkCapsules.MAX_LUCK, false, null, Random(11))
-        s = results.save
         fun skins(r: Reward): List<Reward.SkinReward> = when (r) { is Reward.SkinReward -> listOf(r); is Reward.Bundle -> r.items.flatMap { skins(it) }; else -> emptyList() }
-        results.value.flatMap { skins(it.reward) }.forEach { seen += it }
-        assertTrue(seen.all { it.fighter == FighterId.BYTE })
-        assertTrue(seen.size <= 2)
-        assertEquals(setOf(0, 1, 2), s.progress(FighterId.BYTE).ownedSkins)
+        val rng = Random(11)
+        var s = SaveData(capsules = 1500)
+        var skinsSeen = 0
+        repeat(1500) {
+            val before = s
+            val done = Economy.openDrops(before, SparkCapsules.MAX_LUCK, false, 1, rng)
+            s = done.save
+            for (sk in done.value.flatMap { skins(it.reward) }) {
+                skinsSeen++
+                assertTrue("only an unlocked fighter's colourways come out", before.progress(sk.fighter).unlocked)
+                assertFalse("never one that is already owned", sk.skinIndex in before.progress(sk.fighter).ownedSkins)
+                assertTrue(sk.skinIndex in Balance.fighter(sk.fighter).skins.indices)
+            }
+        }
+        assertTrue("and some did come out", skinsSeen > 0)
+        assertTrue(s.progress(FighterId.BYTE).ownedSkins.containsAll(setOf(0, 1, 2)))
     }
 
     @Test fun theDebugMenusHandOutsChangeTheSave() {
@@ -362,5 +351,15 @@ class EconomyTest {
         assertEquals(100, s.credits)
         assertEquals("nothing goes below zero", 0, Economy.devGrant(SaveData(cups = 10), cups = -50).cups)
         assertEquals(Balance.upgradeCostFrom(1), Progression.upgradeCost(SaveData(), FighterId.BYTE))
+    }
+
+    @Test fun freeDropsNeverRunOut() {
+        // Glitch Drops only mode and the Chaos Command Center: none is used up, and there are always more.
+        val done = Economy.openDrops(SaveData(capsules = 0), 0f, true, 5, Random(2))
+        assertEquals(5, done.value.size)
+        assertEquals("only what split off is left over", done.value.sumOf { it.pieces - 1 }, done.save.capsules)
+        val held = Economy.openDrops(SaveData(capsules = 3), 0f, true, 4, Random(2))
+        assertEquals(4, held.value.size)
+        assertTrue("the three held are still there", held.save.capsules >= 3)
     }
 }

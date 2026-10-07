@@ -76,7 +76,6 @@ sealed interface Screen {
     data object News : Screen { override val depth = 1 }
     data object Shop : Screen { override val depth = 1 }
     data object Road : Screen { override val depth = 2 }
-    data object Pass : Screen { override val depth = 1 }
     data object Settings : Screen { override val depth = 1 }
     data class Match(val config: MatchConfig) : Screen { override val depth = 2 }
     data class Result(val summary: MatchSummary, val rewards: MatchRewards) : Screen { override val depth = 3 }
@@ -102,7 +101,6 @@ fun App(repo: GameRepository, game: LocalGame, sfx: Sfx, music: io.github.projec
                 "tryvarun" -> Screen.Match(startMatchConfig(repo.save.value).copy(playerFighter = FighterId.VARUN, playerSkin = 0, mode = io.github.projectwip.data.GameMode.TRAINING, boss = null))
                 "shop" -> Screen.Shop
                 "road" -> Screen.Road
-                "pass" -> Screen.Pass
                 "track" -> Screen.CupTrack
                 "settings" -> Screen.Settings
                 "news" -> Screen.News
@@ -154,15 +152,6 @@ fun App(repo: GameRepository, game: LocalGame, sfx: Sfx, music: io.github.projec
         booting = false
     }
 
-    // The debug menu and its cheats are in Settings > Developer. With the menu off the cheats are off too.
-    val devMenu = save.settings.devMenu
-    LaunchedEffect(devMenu, booting) {
-        val s = repo.save.value.settings
-        if (!booting && !devMenu && (s.debugLuck != 0f || s.debugInfiniteCapsules || s.debugNoLevelCap || s.debugUpgradeCost != 1f)) {
-            repo.updateSettings { it.copy(debugLuck = 0f, debugInfiniteCapsules = false, debugNoLevelCap = false, debugUpgradeCost = 1f) }
-        }
-    }
-
     LaunchedEffect(save.settings) {
         sfx.volume = if (save.settings.muted) 0f else save.settings.sfxVolume
         sfx.hapticsEnabled = save.settings.haptics
@@ -188,11 +177,11 @@ fun App(repo: GameRepository, game: LocalGame, sfx: Sfx, music: io.github.projec
     var toast by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(toast) { if (toast != null) { delay(3200); toast = null } }
     val ask = remember { GameCall(game, sfx) { toast = it } }
-    // Cheats (luck, drops that aren't used up) only count while the debug menu is on.
+    // The Chaos Command Center's luck and free drops, and the Glitch Drops only mode (endless drops), count here.
     val openCapsule: () -> Unit = {
         val cheats = repo.save.value.settings
-        val result = game.openDrop(if (devMenu) cheats.debugLuck else 0f, devMenu && cheats.debugInfiniteCapsules)
-        if (result != null) capsule = result else toast = "No Spark Drops to open."
+        val result = game.openDrop(cheats.debugLuck, cheats.debugInfiniteCapsules || cheats.glitchDropsOnly)
+        if (result != null) capsule = result else toast = "No Glitch Drops to open."
     }
     /** Everything that came out of an "open all", while it is being shown. Like [capsule], it is already saved. */
     var haul by remember {
@@ -201,11 +190,11 @@ fun App(repo: GameRepository, game: LocalGame, sfx: Sfx, music: io.github.projec
     }
     // Opens every drop that is left. [first] is the one on screen, when its own reveal is being skipped.
     val openAll: (CapsuleResult?) -> Unit = { first ->
-        val rest = game.openAllDrops(if (devMenu) repo.save.value.settings.debugLuck else 0f)
+        val cheats = repo.save.value.settings
+        val rest = game.openAllDrops(cheats.debugLuck, cheats.debugInfiniteCapsules || cheats.glitchDropsOnly)
         if (rest != null) { capsule = null; haul = listOfNotNull(first) + rest }
-        else toast = "No Spark Drops to open."
+        else toast = "No Glitch Drops to open."
     }
-    var debugMenu by remember { mutableStateOf(false) }
 
     BackHandler(enabled = screen !is Screen.Home && screen !is Screen.Match) {
         screen = Screen.Home
@@ -222,7 +211,7 @@ fun App(repo: GameRepository, game: LocalGame, sfx: Sfx, music: io.github.projec
         val metrics = UiMetrics(maxWidth.value / scale, maxHeight.value / scale, scale)
 
         val lobby = remember { io.github.projectwip.render3d.LobbyParams() }
-        CompositionLocalProvider(LocalDensity provides density, LocalUi provides metrics, LocalSfx provides sfx, LocalLobby provides lobby, LocalDev provides true, LocalPlay provides game, LocalGameCall provides ask) {
+        CompositionLocalProvider(LocalDensity provides density, LocalUi provides metrics, LocalSfx provides sfx, LocalLobby provides lobby, LocalPlay provides game, LocalGameCall provides ask) {
             if (screen !is Screen.Match) {
                 androidx.compose.ui.viewinterop.AndroidView(
                     factory = { ctx -> io.github.projectwip.render3d.LobbyView(ctx, lobby) },
@@ -253,7 +242,6 @@ fun App(repo: GameRepository, game: LocalGame, sfx: Sfx, music: io.github.projec
                     Screen.News -> io.github.projectwip.ui.screens.NewsScreen(go)
                     Screen.Shop -> ShopScreen(save, repo, go, showReward)
                     Screen.Road -> io.github.projectwip.ui.screens.RoadScreen(save, go, showReward)
-                    Screen.Pass -> io.github.projectwip.ui.screens.PassScreen(save, go, showReward)
                     Screen.Settings -> SettingsScreen(save, repo, go)
                     is Screen.Match -> MatchScreen(
                         s.config, save.settings, sfx, save.matchesPlayed,
@@ -270,14 +258,6 @@ fun App(repo: GameRepository, game: LocalGame, sfx: Sfx, music: io.github.projec
             AnimatedVisibility(reveal != null, enter = fadeIn(tween(150)), exit = fadeOut(tween(150))) {
                 reveal?.let { RewardRevealOverlay(it, save.bolts, save.prisms, roadNow(save), roadGoal(save)) { reveal = null } }
             }
-            // The debug menu hides behind a small "D" in the corner of every menu screen.
-            // Developers only, and only if they switched it on in Settings > Developer.
-            if (devMenu && screen !is Screen.Match && capsule == null && haul == null && reveal == null) {
-                // On the home screen the bottom-left corner belongs to the Spark Pass and Spark Road cards, so the
-                // button sits under the settings gear instead, in line with it.
-                io.github.projectwip.ui.screens.DebugButton(if (screen is Screen.Home) Modifier.align(Alignment.TopEnd).padding(top = 70.dp, end = 27.dp) else Modifier.align(Alignment.BottomStart)) { debugMenu = true }
-            }
-            if (debugMenu && devMenu) io.github.projectwip.ui.screens.DebugMenu(save, repo) { debugMenu = false }
             toast?.let { Badge(it, Modifier.align(Alignment.TopCenter).padding(top = 120.dp), color = Palette.RedDeep) }
             AnimatedVisibility(booting, enter = fadeIn(tween(0)), exit = fadeOut(tween(250))) {
                 io.github.projectwip.ui.screens.LoadingScreen(bootProgress, bootStatus)
@@ -287,7 +267,7 @@ fun App(repo: GameRepository, game: LocalGame, sfx: Sfx, music: io.github.projec
                 needsName = false
             }
             AnimatedVisibility(capsule != null, enter = fadeIn(tween(150)), exit = fadeOut(tween(150))) {
-                capsule?.let { CapsuleOpenOverlay(it, if (save.settings.debugInfiniteCapsules) Int.MAX_VALUE else save.capsules, save.bolts, save.prisms, roadNow(save), roadGoal(save), onNext = openCapsule, onOpenAll = openAll, onDone = { capsule = null }) }
+                capsule?.let { CapsuleOpenOverlay(it, if (save.settings.debugInfiniteCapsules || save.settings.glitchDropsOnly) Int.MAX_VALUE else save.capsules, save.bolts, save.prisms, roadNow(save), roadGoal(save), onNext = openCapsule, onOpenAll = openAll, onDone = { capsule = null }) }
             }
             AnimatedVisibility(haul != null, enter = fadeIn(tween(150)), exit = fadeOut(tween(150))) {
                 haul?.let { io.github.projectwip.ui.screens.DropHaulOverlay(it, save.bolts, save.prisms, roadNow(save), roadGoal(save)) { haul = null } }
@@ -318,7 +298,6 @@ fun rewardLabel(r: Reward): String = when (r) {
     is Reward.Bolts -> "+${r.amount} Power Ups"
     is Reward.Prisms -> "+${r.amount} Crystals"
     is Reward.Credits -> "+${r.amount} Credits"
-    is Reward.Glory -> "+${r.amount} Glory"
     is Reward.UnlockFighter -> "${Balance.fighter(r.fighter).name} unlocked!"
     is Reward.SkinReward -> "${Balance.fighter(r.fighter).skins[r.skinIndex].name} colorway"
     is Reward.Bundle -> r.items.joinToString(", ") { rewardLabel(it) }
@@ -330,7 +309,6 @@ fun RewardVisual(r: Reward, modifier: Modifier = Modifier) {
         is Reward.Bolts -> GameIcon(IconKind.BOLT, modifier)
         is Reward.Prisms -> GameIcon(IconKind.PRISM, modifier)
         is Reward.Credits -> GameIcon(IconKind.CREDIT, modifier)
-        is Reward.Glory -> GameIcon(IconKind.GLORY, modifier)
         is Reward.UnlockFighter -> FighterView(Balance.fighter(r.fighter), 0, modifier, pedestal = false)
         is Reward.SkinReward -> FighterView(Balance.fighter(r.fighter), r.skinIndex, modifier, pedestal = false)
         is Reward.Bundle -> GameIcon(IconKind.GIFT, modifier)
@@ -350,11 +328,11 @@ private fun RewardRevealOverlay(r: RewardReveal, boltsNow: Int, prismsNow: Int, 
     }
 }
 
-/** What the Spark Road is asking for the fighter being unlocked; 0 once the road is finished (Credits are Glory from then on). */
+/** What the Spark Road is asking for the fighter being unlocked; 0 once the road is finished. */
 fun roadGoal(save: io.github.projectwip.data.SaveData): Int = io.github.projectwip.data.SparkRoad.next(save)?.cost ?: 0
 
-/** What a [RoadMeter] shows: the Credits on the road, or (road finished) the Glory earned. */
-fun roadNow(save: io.github.projectwip.data.SaveData): Int = if (roadGoal(save) > 0) save.credits else save.glory
+/** What a [RoadMeter] shows: the Credits on the road. */
+fun roadNow(save: io.github.projectwip.data.SaveData): Int = save.credits
 
 /** Confirm dialog in game style. */
 @Composable

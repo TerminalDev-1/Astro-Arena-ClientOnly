@@ -39,35 +39,9 @@ import io.github.projectwip.ui.Panel
 import io.github.projectwip.ui.PlainText
 import io.github.projectwip.ui.Type
 
-/** The small "D" in the bottom-left corner of the menus that opens the debug menu. */
+/** The Chaos Command Center: every tweak the game has (drop luck, free drops, upgrade cost, level cap, hand-outs). They change the real save. */
 @Composable
-fun DebugButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
-    ChunkyButton(onClick, modifier.padding(start = 6.dp, bottom = 6.dp).size(34.dp, 34.dp).graphicsLayer { alpha = 0.75f },
-        ButtonStyle.GLASS, cut = 8.dp, lip = 3.dp, sound = Sound.UI_OPEN) {
-        GameText("D", Type.Label, outline = 2.dp)
-    }
-}
-
-/** The debug menu as a pop-up (from the corner "D"). The same controls are also a tab in Settings. */
-@Composable
-fun DebugMenu(save: SaveData, repo: GameRepository, onClose: () -> Unit) {
-    BackHandler(onBack = onClose)
-    Box(
-        Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)).clickable(remember { MutableInteractionSource() }, null, onClick = onClose),
-        contentAlignment = Alignment.Center,
-    ) {
-        Panel(Modifier.widthIn(max = 760.dp).padding(18.dp).clickable(remember { MutableInteractionSource() }, null) { }, cut = 20.dp) {
-            Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                DebugControls(save, repo)
-                ChunkyButton(onClose, Modifier.width(170.dp).height(52.dp).align(Alignment.End), ButtonStyle.ORANGE, lip = 4.dp, sound = Sound.UI_BACK) { GameText("CLOSE", Type.Heading) }
-            }
-        }
-    }
-}
-
-/** Cheats for trying things out. They change the real save. */
-@Composable
-fun DebugControls(save: SaveData, repo: GameRepository) {
+fun ChaosCommandCenter(save: SaveData, repo: GameRepository) {
     val s = save.settings
     val ask = io.github.projectwip.ui.LocalGameCall.current
     // The slider's own position while it is being dragged, so the number and the odds follow the thumb;
@@ -75,15 +49,12 @@ fun DebugControls(save: SaveData, repo: GameRepository) {
     var luck by remember { mutableFloatStateOf(s.debugLuck) }
     var costFactor by remember { mutableFloatStateOf(s.debugUpgradeCost) }
     fun snap(v: Float) = (v * 10).toInt() / 10f
-    SectionTitle("DEBUG MENU", "Cheats for trying things out. They change your real save.")
+    SectionTitle("CHAOS COMMAND CENTER", "Every tweak in the game. They change your real save, so use them however you like.")
     ToggleRow("INFINITE DROPS", "The drop button always works and opening one never uses it up.", s.debugInfiniteCapsules) { v ->
         repo.updateSettings { it.copy(debugInfiniteCapsules = v) }
     }
-    // Dev builds only: it makes fighters as strong as you like.
-    if (io.github.projectwip.BuildConfig.DEBUG) {
-        ToggleRow("NO LEVEL CAP", "Fighters can be upgraded past level ${io.github.projectwip.data.Balance.MAX_LEVEL}. Only in dev builds.", s.debugNoLevelCap) { v ->
-            repo.updateSettings { it.copy(debugNoLevelCap = v) }
-        }
+    ToggleRow("NO LEVEL CAP", "Fighters can be upgraded past level ${io.github.projectwip.data.Balance.MAX_LEVEL}.", s.debugNoLevelCap) { v ->
+        repo.updateSettings { it.copy(debugNoLevelCap = v) }
     }
     SliderRow("DROP LUCK", "×${"%.1f".format(1f + luck)}", s.debugLuck, 0f, SparkCapsules.MAX_LUCK, onDrag = { luck = snap(it) }) { v ->
         luck = snap(v)

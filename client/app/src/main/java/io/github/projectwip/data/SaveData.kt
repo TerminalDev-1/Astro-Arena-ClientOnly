@@ -48,8 +48,8 @@ data class Settings(
     val debugNoLevelCap: Boolean = false,
     /** Debug menu: multiplies what every upgrade costs (1 = normal, 0 = free). */
     val debugUpgradeCost: Float = 1f,
-    /** Developers: show the "D" button that opens the debug menu. Off unless they switch it on in Settings. */
-    val devMenu: Boolean = false,
+    /** Glitch Drops only: the home screen is just the Glitch Drop button, and there are always more to open. */
+    val glitchDropsOnly: Boolean = false,
 )
 
 data class FighterProgress(
@@ -68,8 +68,6 @@ data class SaveData(
     val prisms: Int = Balance.STARTING_PRISMS,
     /** Credits on the Spark Road, toward the next fighter along it. Not a wallet: they can only become that fighter. */
     val credits: Int = 0,
-    /** What Credits are earned as once every fighter is unlocked. */
-    val glory: Int = 0,
     val fighters: Map<FighterId, FighterProgress> = defaultFighters(),
     val selectedFighter: FighterId = FighterId.BYTE,
     val selectedMode: GameMode = GameMode.LAST_SPARK,
@@ -95,11 +93,6 @@ data class SaveData(
     val boostedCapsules: Int = 0,
     /** Seeds the next capsule roll; stored so reloading the game can't re-roll a capsule. */
     val capsuleSeed: Long = 0,
-    /** The Spark Pass season [passPoints] and [passClaimed] belong to (-1 = none yet); a new season starts from nothing. */
-    val passSeason: Long = -1,
-    val passPoints: Int = 0,
-    /** Spark Pass tiers (1-based) whose reward has been claimed this season. */
-    val passClaimed: Set<Int> = emptySet(),
     /** The day [dailyBought] counts for, and the titles of today's offers already bought. */
     val dailyDay: Long = -1,
     val dailyBought: Set<String> = emptySet(),

@@ -119,7 +119,7 @@ fun GlitchBars(time: Float, color: Color, strength: Float) {
 
 private fun boltsIn(r: Reward): Int = when (r) { is Reward.Bolts -> r.amount; is Reward.Bundle -> r.items.sumOf { boltsIn(it) }; else -> 0 }
 private fun prismsIn(r: Reward): Int = when (r) { is Reward.Prisms -> r.amount; is Reward.Bundle -> r.items.sumOf { prismsIn(it) }; else -> 0 }
-private fun creditsIn(r: Reward): Int = when (r) { is Reward.Credits -> r.amount; is Reward.Glory -> r.amount; is Reward.Bundle -> r.items.sumOf { creditsIn(it) }; else -> 0 }
+private fun creditsIn(r: Reward): Int = when (r) { is Reward.Credits -> r.amount; is Reward.Bundle -> r.items.sumOf { creditsIn(it) }; else -> 0 }
 private fun unlocksIn(r: Reward): Int = when (r) { is Reward.UnlockFighter, is Reward.SkinReward -> 1; is Reward.Bundle -> r.items.sumOf { unlocksIn(it) }; else -> 0 }
 
 /** One icon on its way from a card to the wallet (to counter number [purse]: 0 Power Ups, 1 Crystals, 2 Credits). The first of each handful carries the amount, paid in when it lands. */
@@ -139,7 +139,6 @@ private fun shortLabel(r: Reward): String = when (r) {
     is Reward.Bolts -> "+%,d".format(r.amount)
     is Reward.Prisms -> "+%,d".format(r.amount)
     is Reward.Credits -> "+%,d".format(r.amount)
-    is Reward.Glory -> "+%,d".format(r.amount)
     is Reward.UnlockFighter -> Balance.fighter(r.fighter).name.substringBefore(' ').uppercase()
     is Reward.SkinReward -> Balance.fighter(r.fighter).skins[r.skinIndex].name.uppercase()
     is Reward.Bundle -> "JACKPOT"
@@ -290,7 +289,7 @@ fun DropHaulOverlay(results: List<CapsuleResult>, boltsNow: Int, prismsNow: Int,
     ) {
         if (stage == 0) {
             Column(Modifier.fillMaxSize().padding(top = 26.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                GameText("OPENING ${"%,d".format(results.size)} SPARK DROPS", Type.Heading, color = Palette.TextDim, outline = 2.5.dp)
+                GameText("OPENING ${"%,d".format(results.size)} GLITCH DROPS", Type.Heading, color = Palette.TextDim, outline = 2.5.dp)
                 GlitchText(CapsuleTier.entries[charge].label.uppercase(), Type.Display.copy(fontSize = Type.Display.fontSize * 1.25f), tint, 5.dp, time, 1f)
             }
             GlitchBars(time, tint, 1f)
@@ -326,7 +325,7 @@ fun DropHaulOverlay(results: List<CapsuleResult>, boltsNow: Int, prismsNow: Int,
                     ) {
                         if (bolts > 0) Total(IconKind.BOLT, "+%,d".format(bolts))
                         if (prisms > 0) Total(IconKind.PRISM, "+%,d".format(prisms))
-                        if (credits > 0) Total(if (roadGoal > 0) IconKind.CREDIT else IconKind.GLORY, "+%,d".format(credits))
+                        if (credits > 0) Total(IconKind.CREDIT, "+%,d".format(credits))
                         if (unlocks > 0) Total(IconKind.FIGHTERS, "$unlocks NEW")
                         ChunkyButton(onDone, Modifier.size(190.dp, 60.dp), ButtonStyle.GREEN) { GameText("AWESOME", Type.Heading) }
                     }

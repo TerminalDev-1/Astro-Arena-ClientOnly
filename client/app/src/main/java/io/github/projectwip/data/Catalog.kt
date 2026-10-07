@@ -6,8 +6,6 @@ sealed interface Reward {
     data class Prisms(val amount: Int) : Reward
     /** Credits: progress along the Spark Road, toward the fighter the player picked. Not something held in a wallet. */
     data class Credits(val amount: Int) : Reward
-    /** What Credits are earned as once every fighter is unlocked: a rank to climb, which buys nothing. */
-    data class Glory(val amount: Int) : Reward
     data class UnlockFighter(val fighter: FighterId) : Reward
     data class SkinReward(val fighter: FighterId, val skinIndex: Int) : Reward
     /** Several rewards at once (custom shop offers). */
@@ -74,7 +72,7 @@ data class CapsuleResult(
 }
 
 /**
- * Spark Capsules ("Spark Drops" to players): earned from your first few good finishes each day, opened from the
+ * Spark Capsules ("Glitch Drops" to players): earned from your first few good finishes each day, opened from the
  * home screen. [Economy] decides whether a match earned one, and what comes out when one is opened. What is
  * left here is only what the game needs to show them.
  */
@@ -112,8 +110,8 @@ data class RoadStep(val fighter: FighterId, val cost: Int)
 
 /**
  * The Spark Road. Credits are not kept in a wallet: whatever is earned goes straight into the road, toward the
- * next fighter along it. The order is fixed, the cheapest rarity first. When that fighter's cost is covered it
- * is theirs to claim ([Economy.roadUnlock]).
+ * next fighter along it. The order is fixed, the cheapest rarity first. The moment that fighter's cost is covered
+ * it is unlocked ([Economy.grant]) and what is left carries on toward the next.
  */
 object SparkRoad {
     /** Every fighter on the road, in the order they are unlocked. */
@@ -143,43 +141,6 @@ object FighterRanks {
         val from = startOf(rank(cups))
         return ((cups - from).toFloat() / (nextAt(cups) - from)).coerceIn(0f, 1f)
     }
-}
-
-/** A Glory rank: its title, and how far into it the player is. */
-data class GloryRank(val title: String, val into: Int, val size: Int)
-
-/**
- * Glory: what Credits turn into once every fighter is unlocked. It buys nothing; it is a rank shown beside the
- * player's name, climbed for its own sake.
- */
-object Glory {
-    /** Glory from one rank to the next. */
-    const val STEP = 250
-    private val TITLES = listOf("Rookie", "Contender", "Challenger", "Star", "Icon", "Legend")
-    private val NUMERALS = listOf("I", "II", "III")
-
-    fun rank(glory: Int): GloryRank {
-        val index = (glory.coerceAtLeast(0) / STEP).coerceAtMost(TITLES.size * NUMERALS.size - 1)
-        return GloryRank("${TITLES[index / NUMERALS.size]} ${NUMERALS[index % NUMERALS.size]}", glory.coerceAtLeast(0) - index * STEP, STEP)
-    }
-}
-
-/** This season's Spark Pass: points earned by playing, and a reward to claim at every tier. */
-data class PassState(
-    val season: Long,
-    /** When the season ends, on this device's clock (ms). */
-    val endsAt: Long,
-    val points: Int,
-    /** Points from one tier to the next. */
-    val tierPoints: Int,
-    /** Tiers (1-based) whose reward has been claimed. */
-    val claimed: Set<Int>,
-    /** The reward at each tier; index 0 is tier 1. */
-    val tiers: List<Reward>,
-) {
-    /** Tiers reached so far. */
-    val reached: Int get() = if (tierPoints > 0) (points / tierPoints).coerceAtMost(tiers.size) else 0
-    val claimable: Int get() = (1..reached).count { it !in claimed }
 }
 
 /** The Cup Track. Milestones must be sorted by [Milestone.cups] and unique. */

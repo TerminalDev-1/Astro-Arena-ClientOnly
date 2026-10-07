@@ -52,17 +52,49 @@ object Economy {
             val given = reward.items.map { item -> grant(s, item).also { s = it.save }.value }
             return Done(s, Reward.Bundle(given))
         }
-        var actual = if (Progression.owns(save, reward)) compensation(reward) else reward
-        // With every fighter unlocked the road is finished, and Credits earned from then on are Glory.
-        if (actual is Reward.Credits && SparkRoad.next(save) == null) actual = Reward.Glory(actual.amount)
+        if (reward is Reward.Credits) return fillRoad(save, reward.amount)
+        val actual = if (Progression.owns(save, reward)) compensation(reward) else reward
         return Done(apply(save, actual), actual)
+    }
+
+    /**
+     * Credits go straight onto the Spark Road. The moment they cover the next fighter along it that fighter is
+     * unlocked and what is left carries on toward the one after. Once every fighter is unlocked Credits have
+     * nowhere to go, so they are paid as Power Ups instead, one for one.
+     */
+    private fun fillRoad(save: SaveData, amount: Int): Done<Reward> {
+        if (amount <= 0) return Done(save, Reward.Credits(0))
+        if (SparkRoad.next(save) == null) return Done(save.copy(bolts = save.bolts + amount), Reward.Bolts(amount))
+        var s = save.copy(credits = save.credits + amount)
+        val unlocked = ArrayList<Reward>()
+        while (true) {
+            val step = SparkRoad.next(s) ?: break
+            if (s.credits < step.cost) break
+            s = apply(s.copy(credits = s.credits - step.cost), Reward.UnlockFighter(step.fighter))
+            unlocked += Reward.UnlockFighter(step.fighter)
+        }
+        if (SparkRoad.next(s) == null && s.credits > 0) s = s.copy(bolts = s.bolts + s.credits, credits = 0)
+        return Done(s, if (unlocked.isEmpty()) Reward.Credits(amount) else Reward.Bundle(listOf<Reward>(Reward.Credits(amount)) + unlocked))
+    }
+
+    /** The Credits a reward put on the road (looking inside bundles). */
+    fun creditsIn(reward: Reward): Int = when (reward) {
+        is Reward.Credits -> reward.amount
+        is Reward.Bundle -> reward.items.sumOf { creditsIn(it) }
+        else -> 0
+    }
+
+    /** The fighters a reward unlocked (looking inside bundles). */
+    fun fightersIn(reward: Reward): List<FighterId> = when (reward) {
+        is Reward.UnlockFighter -> listOf(reward.fighter)
+        is Reward.Bundle -> reward.items.flatMap { fightersIn(it) }
+        else -> emptyList()
     }
 
     private fun apply(save: SaveData, reward: Reward): SaveData = when (reward) {
         is Reward.Bolts -> save.copy(bolts = save.bolts + reward.amount)
         is Reward.Prisms -> save.copy(prisms = save.prisms + reward.amount)
-        is Reward.Credits -> save.copy(credits = save.credits + reward.amount)
-        is Reward.Glory -> save.copy(glory = save.glory + reward.amount)
+        is Reward.Credits -> save.copy(credits = save.credits + reward.amount)   // (see fillRoad)
         is Reward.UnlockFighter -> save.copy(fighters = save.fighters + (reward.fighter to save.progress(reward.fighter).copy(unlocked = true)))
         is Reward.SkinReward -> save.progress(reward.fighter).let { p ->
             save.copy(fighters = save.fighters + (reward.fighter to p.copy(ownedSkins = p.ownedSkins + 0 + reward.skinIndex)))
@@ -100,43 +132,6 @@ object Economy {
         if (cups > save.bestCups) throw Refused(409, "not reached yet")
         if (cups in save.claimedMilestones) throw Refused(409, "already claimed")
         return grant(save.copy(claimedMilestones = save.claimedMilestones + cups), milestone.reward)
-    }
-
-    // ---------------------------------------------------------------------------- the Spark Road
-
-    /** Claims the fighter the Credits have been filling, once they cover it. */
-    fun roadUnlock(save: SaveData): Done<Reward> {
-        val step = SparkRoad.next(save) ?: throw Refused(409, "the Spark Road is finished")
-        if (save.credits < step.cost) throw Refused(402, "not enough Credits")
-        val done = grant(save.copy(credits = save.credits - step.cost), Reward.UnlockFighter(step.fighter))
-        var s = done.save
-        // The road has just been finished: Credits left on it have nowhere to go, so they become Glory.
-        if (SparkRoad.next(s) == null && s.credits > 0) s = s.copy(glory = s.glory + s.credits, credits = 0)
-        return Done(s, done.value)
-    }
-
-    // ---------------------------------------------------------------------------- the Spark Pass
-
-    /** This season's Spark Pass (before [PassState] adds the clock): points and what has been claimed. */
-    data class PassProgress(val season: Long, val points: Int, val claimed: Set<Int>)
-
-    /** The player's pass this season, without changing the save: a pass from an earlier season counts as new. */
-    fun passView(save: SaveData, day: Long): PassProgress {
-        val season = SparkPass.season(day)
-        return if (save.passSeason != season) PassProgress(season, 0, emptySet()) else PassProgress(season, save.passPoints, save.passClaimed)
-    }
-
-    fun addPassPoints(save: SaveData, points: Int, day: Long): SaveData {
-        val view = passView(save, day)
-        return save.copy(passSeason = view.season, passClaimed = view.claimed, passPoints = minOf(view.points + maxOf(points, 0), SparkPass.TIERS * SparkPass.TIER_POINTS))
-    }
-
-    fun claimPass(save: SaveData, tier: Int, day: Long): Done<Reward> {
-        val view = passView(save, day)
-        if (tier !in 1..SparkPass.TIERS) throw Refused(404, "no such Spark Pass tier")
-        if (view.points < tier * SparkPass.TIER_POINTS) throw Refused(409, "not reached yet")
-        if (tier in view.claimed) throw Refused(409, "already claimed")
-        return grant(save.copy(passSeason = view.season, passPoints = view.points, passClaimed = view.claimed + tier), SparkPass.reward(tier))
     }
 
     // ---------------------------------------------------------------------------- deals
@@ -242,13 +237,7 @@ object Economy {
         else -> if (good(mode, outcome, placement)) 6 else 2
     }
 
-    fun passPoints(mode: GameMode, outcome: MatchOutcome, placement: Int): Int = when {
-        mode == GameMode.TRAINING -> 0
-        mode == GameMode.BOSS -> if (good(mode, outcome, placement)) 20 else 8
-        else -> if (good(mode, outcome, placement)) 40 else 15
-    }
-
-    /** A win in Knockout Rush, or a top-4 finish in Last Spark, earns a Spark Drop. */
+    /** A win in Knockout Rush, or a top-4 finish in Last Spark, earns a Glitch Drop. */
     fun earnsDrop(mode: GameMode, outcome: MatchOutcome, placement: Int): Boolean = when (mode) {
         GameMode.LAST_SPARK -> placement in 1..4
         GameMode.KNOCKOUT_RUSH -> outcome == MatchOutcome.VICTORY
@@ -257,7 +246,7 @@ object Economy {
 
     /**
      * Settles a finished match: what it pays in Bolts, Crystals, Credits and Spark Pass points goes into the save,
-     * and the verdict says the rest (Cups and Spark Drops are applied by [Progression.applyMatch] from it).
+     * and the verdict says the rest (Cups and Glitch Drops are applied by [Progression.applyMatch] from it).
      */
     fun settleMatch(save: SaveData, report: MatchReport, day: Long): Done<MatchVerdict> {
         val mode = report.mode
@@ -277,17 +266,15 @@ object Economy {
             fighters = save.fighters + (report.fighter to save.progress(report.fighter).copy(cups = fighterAfter)),
         )
         val paid = grant(s, Reward.Credits(matchCredits(mode, report.outcome, report.placement))).also { s = it.save }.value
-        val points = passPoints(mode, report.outcome, report.placement)
-        s = addPassPoints(s, points, day)
         val drops = save.capsules + if (drop) 1 else 0
         return Done(s, MatchVerdict(
             cupDelta = cups - save.cups, cups = cups, drop = drop, drops = drops, dropsLeftToday = SparkCapsules.PER_DAY - earnedToday - if (drop) 1 else 0,
-            bolts = bolts, firstWinPrisms = prisms, credits = (paid as? Reward.Credits)?.amount ?: 0, passPoints = points, glory = (paid as? Reward.Glory)?.amount ?: 0,
+            bolts = bolts + ((paid as? Reward.Bolts)?.amount ?: 0), firstWinPrisms = prisms, credits = creditsIn(paid), unlocked = fightersIn(paid),
             fighterCupsBefore = fighterBefore, fighterCups = fighterAfter, mvpCups = mvpCups,
         ))
     }
 
-    // ---------------------------------------------------------------------------- Spark Drops
+    // ---------------------------------------------------------------------------- Glitch Drops
 
     private const val DROP_BUFF = 3
     /** "Open all" opens the drops held at that moment; the pieces that split off wait for the next one. */
@@ -341,8 +328,9 @@ object Economy {
     }
 
     /**
-     * Opens up to [most] of the Spark Drops the player holds (null = all of them, up to [MAX_OPEN_ALL]) and adds what
-     * came out to the save. [free]: the first one isn't used up (the debug menu). Pieces from an earlier split are
+     * Opens up to [most] of the Glitch Drops the player holds (null = all of them, up to [MAX_OPEN_ALL]) and adds what
+     * came out to the save. [free]: none is used up, and there are always more (the Chaos Command Center, and the
+     * Glitch Drops only mode); [most] must then say how many, since there is no count to go by. Pieces from an earlier split are
      * opened first and roll better than a plain drop. Empty if there was nothing to open.
      */
     fun openDrops(save: SaveData, luck: Float, free: Boolean, most: Int?, rng: Random): Done<List<CapsuleResult>> {
@@ -352,7 +340,7 @@ object Economy {
         val limit = most ?: minOf(drops, MAX_OPEN_ALL)
         val luck = luck.coerceIn(0f, SparkCapsules.MAX_LUCK)
         val results = ArrayList<CapsuleResult>()
-        while (results.size < limit && (drops > 0 || (free && results.isEmpty()))) {
+        while (results.size < limit && (drops > 0 || free)) {
             val boosted = boostedLeft > 0
             var tier = rollTier(rng, luck + if (boosted) SPLIT_LUCK else 0f)
             if (boosted && tier == 0) tier = 1
@@ -373,10 +361,11 @@ object Economy {
     /** The debug menu's hand-outs. */
     fun devGrant(save: SaveData, cups: Int = 0, drops: Int = 0, bolts: Int = 0, prisms: Int = 0, credits: Int = 0): SaveData {
         val newCups = (save.cups + cups).coerceAtLeast(0)
-        return save.copy(
+        val base = save.copy(
             cups = newCups, bestCups = maxOf(save.bestCups, newCups), capsules = (save.capsules + drops).coerceAtLeast(0),
-            bolts = (save.bolts + bolts).coerceAtLeast(0), prisms = (save.prisms + prisms).coerceAtLeast(0), credits = (save.credits + credits).coerceAtLeast(0),
+            bolts = (save.bolts + bolts).coerceAtLeast(0), prisms = (save.prisms + prisms).coerceAtLeast(0),
         )
+        return if (credits > 0) grant(base, Reward.Credits(credits)).save else base
     }
 }
 
@@ -401,25 +390,5 @@ object Trophies {
             else -> -(if (pays.lossStep > 0) minOf(pays.maxLoss, cups / pays.lossStep) else pays.maxLoss)
         }
         return maxOf(delta, -cups)
-    }
-}
-
-/** A season of tiers. Playing earns pass points; every [TIER_POINTS] reaches the next tier, each with a reward to claim. A new season starts everyone from nothing. */
-object SparkPass {
-    const val SEASON_DAYS = 28L
-    const val TIER_POINTS = 100
-    const val TIERS = 30
-
-    fun season(day: Long): Long = Math.floorDiv(day, SEASON_DAYS)
-
-    /** The day (counted from 1970) a season ends on. */
-    fun endDay(day: Long): Long = (season(day) + 1) * SEASON_DAYS
-
-    /** What tier [tier] (1-based) gives. */
-    fun reward(tier: Int): Reward = when {
-        tier % 10 == 0 -> Reward.Credits(150)
-        tier % 5 == 0 -> Reward.Prisms(30)
-        tier % 2 == 1 -> Reward.Credits(30 + 10 * (tier / 10))
-        else -> Reward.Bolts(200 + 20 * tier)
     }
 }

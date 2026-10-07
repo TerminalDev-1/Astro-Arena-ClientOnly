@@ -73,7 +73,6 @@ fun ShopScreen(save: SaveData, repo: GameRepository, go: (Screen) -> Unit, showR
     // Cards keep their shape: the row is as tall as the screen allows (less the header and the section titles),
     // so the width follows the height instead of being one fixed number that looks squashed on a tablet.
     val cardW = ((ui.heightDp - 120f) * 0.62f).coerceIn(176f, 300f).dp
-    val dev = io.github.projectwip.ui.LocalDev.current
     val ask = io.github.projectwip.ui.LocalGameCall.current
     // Today's offers and the clock they run on. When the day ends the shop is asked for the new one (new offers, a new gift).
     val game = io.github.projectwip.ui.LocalPlay.current
@@ -106,11 +105,11 @@ fun ShopScreen(save: SaveData, repo: GameRepository, go: (Screen) -> Unit, showR
                 // Deals are made with the Offer Creator (Settings > Developer).
                 val now = System.currentTimeMillis()
                 val deals = save.customOffers.filter { !it.expired(now) }
-                if (dev || deals.isNotEmpty()) item {
+                item {
                     Section("DEALS") {
-                        if (dev) CreateOfferCard(cardW * 0.8f) { creating = true }
+                        CreateOfferCard(cardW * 0.8f) { creating = true }
                         deals.forEach { o ->
-                            CustomOfferCard(o, cardW, canDelete = dev,
+                            CustomOfferCard(o, cardW, canDelete = true,
                                 onBuy = { ask({ buyDeal(o.id) }) { showReward(RewardReveal(o.title, it)) } },
                                 onDelete = { ask({ deleteDeal(o.id) }) })
                         }

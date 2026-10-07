@@ -7,9 +7,16 @@ data class NewsItem(val title: String, val date: String, val tag: String, val te
 object News {
     val items: List<NewsItem> = listOf(
         NewsItem(
+            "Chaos Command Center, Glitch Drops and a bigger Spark Road", "2026-10-07", "NEW",
+            "Spark Drops are now Glitch Drops. The Spark Pass and Glory are gone: fill the Spark Road's Credit bar and the " +
+                "fighter unlocks on the spot (Rare 2,500 Credits, Epic 4,200, Mythic 6,500, Legendary 9,000, Ultra 13,000). " +
+                "Every tweak in the game now lives in Settings > Chaos Command Center, and Settings > Gameplay has a Glitch " +
+                "Drops only switch that turns the home screen into nothing but drops.",
+        ),
+        NewsItem(
             "Client only: no server needed", "2026-10-07", "NEW",
             "AstroArena now runs entirely on your device. There is no server, no account and no connection to make: " +
-                "Spark Drops, the shop, upgrades, the Cup Track, the Spark Road and the Spark Pass all work offline, and " +
+                "Glitch Drops, the shop, upgrades, the Cup Track and the Spark Road all work offline, and " +
                 "your progress is kept in the save on this device. The 1v1 and team modes needed other players on a " +
                 "server, so they are gone, and so is the leaderboard.",
         ),

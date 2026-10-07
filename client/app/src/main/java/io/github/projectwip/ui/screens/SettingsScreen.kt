@@ -70,7 +70,7 @@ import androidx.compose.runtime.collectAsState
 
 const val REPO_URL = "https://github.com/TerminalDev-1/Astro-Arena-Exp"
 
-private enum class Tab(val label: String) { GAMEPLAY("Gameplay"), CONTROLS("Controls"), AUDIO("Audio & Feel"), DISPLAY("Display"), DATA("Data"), DEVELOPER("Developer") }
+private enum class Tab(val label: String) { GAMEPLAY("Gameplay"), CONTROLS("Controls"), AUDIO("Audio & Feel"), DISPLAY("Display"), DATA("Data"), CHAOS("Chaos Command Center") }
 
 @Composable
 fun SettingsScreen(save: SaveData, repo: GameRepository, go: (Screen) -> Unit) {
@@ -78,7 +78,6 @@ fun SettingsScreen(save: SaveData, repo: GameRepository, go: (Screen) -> Unit) {
     var editingLayout by remember { mutableStateOf(false) }
     val s = save.settings
     val set: ((Settings) -> Settings) -> Unit = { repo.updateSettings(it) }
-    val dev = io.github.projectwip.ui.LocalDev.current
     val ui = LocalUi.current
 
     Box(Modifier.fillMaxSize()) {
@@ -88,7 +87,7 @@ fun SettingsScreen(save: SaveData, repo: GameRepository, go: (Screen) -> Unit) {
             ScreenHeader("SETTINGS", { go(Screen.Home) }, null, null)
             Row(Modifier.weight(1f).padding(start = 16.dp, end = 16.dp, bottom = 14.dp)) {
                 Column(Modifier.width(if (ui.roomy) 200.dp else 170.dp), verticalArrangement = Arrangement.spacedBy(if (ui.roomy) 10.dp else 7.dp)) {
-                    for (t in Tab.entries.filter { it != Tab.DEVELOPER || dev }) {
+                    for (t in Tab.entries) {
                         ChunkyButton({ tab = t }, Modifier.fillMaxWidth().height(if (ui.roomy) 58.dp else 42.dp),
                             if (t == tab) ButtonStyle.ORANGE else ButtonStyle.PURPLE, lip = 4.dp, sound = Sound.UI_SELECT) {
                             GameText(t.label.uppercase(), Type.Label, outline = 2.dp)
@@ -104,7 +103,7 @@ fun SettingsScreen(save: SaveData, repo: GameRepository, go: (Screen) -> Unit) {
                             Tab.AUDIO -> AudioTab(s, set)
                             Tab.DISPLAY -> DisplayTab(s, set)
                             Tab.DATA -> DataTab(repo)
-                            Tab.DEVELOPER -> if (dev) DeveloperTab(s, set)
+                            Tab.CHAOS -> ChaosCommandCenter(save, repo)
                         }
                     }
                 }
@@ -133,6 +132,9 @@ private fun GameplayTab(s: Settings, set: ((Settings) -> Settings) -> Unit) {
                 }
             }
         }
+    }
+    ToggleRow("GLITCH DROPS ONLY", "The home screen becomes just the Glitch Drop button, with endless drops to open. No fights. Turn it off to get the fights back.", s.glitchDropsOnly) { v ->
+        set { it.copy(glitchDropsOnly = v) }
     }
     SectionTitle("PLAYER NAME", "Shown above your fighter in matches.")
     NameField(s.playerName) { n -> set { it.copy(playerName = n, nameChosen = true) } }
@@ -220,15 +222,6 @@ private fun DataTab(repo: GameRepository) {
     PlainText(REPO_URL, Type.Small, color = Palette.Cyan)
     if (confirm) {
         ConfirmDialog("RESET EVERYTHING?", "All progress will be lost.", "RESET", { confirm = false; repo.resetProgress() }, { confirm = false }, ButtonStyle.RED)
-    }
-}
-
-/** Developers only: whether the "D" button (the debug menu) is on the menu screens. It is off until switched on here. */
-@Composable
-private fun DeveloperTab(s: Settings, set: ((Settings) -> Settings) -> Unit) {
-    SectionTitle("DEVELOPER", "Tools for testing the game.")
-    ToggleRow("DEVELOPER MENU", "Shows a small D button in the corner of the menu screens. It opens the debug menu: drop luck, upgrade cost, hand-outs.", s.devMenu) { v ->
-        set { it.copy(devMenu = v) }
     }
 }
 
