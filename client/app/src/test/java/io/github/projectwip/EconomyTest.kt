@@ -81,7 +81,7 @@ class EconomyTest {
 
     @Test fun creditsFillTheRoadAndTheFighterUnlocksTheMomentItIsFull() {
         val first = SparkRoad.steps.first()
-        assertEquals("the road's prices", listOf(2500, 4200, 6500, 9000), SparkRoad.steps.map { it.cost })
+        assertEquals("the road's prices", listOf(2500, 4200, 6500, 9000, 13000), SparkRoad.steps.map { it.cost })
         // Not enough yet: the Credits just sit on the road.
         val some = Economy.grant(SaveData(), Reward.Credits(first.cost - 1))
         assertEquals(Reward.Credits(first.cost - 1), some.value)
@@ -97,7 +97,7 @@ class EconomyTest {
         val two = Economy.grant(SaveData(), Reward.Credits(SparkRoad.steps[0].cost + SparkRoad.steps[1].cost + 3))
         assertEquals(SparkRoad.steps.take(2).map { it.fighter }, Economy.fightersIn(two.value))
         assertEquals(3, two.save.credits)
-        // Unlocking the last fighter pays the leftovers out as Power Ups, and so does everything after it.
+        // Unlocking the last fighter pays the leftovers out as Upgrade Credits, and so does everything after it.
         val lastStep = SparkRoad.steps.last()
         val nearly = SaveData(credits = lastStep.cost - 5, fighters = FighterId.entries.associateWith { FighterProgress(unlocked = it != lastStep.fighter) })
         val finished = Economy.grant(nearly, Reward.Credits(30))
@@ -114,7 +114,7 @@ class EconomyTest {
 
     // ---------------------------------------------------------------- the shop
 
-    @Test fun theShopChargesCrystalsAndRefusesWhatIsOwned() {
+    @Test fun theShopChargesChipsAndRefusesWhatIsOwned() {
         val s = SaveData(prisms = 1000)
         val crate = Economy.buy(s, "crate_s")
         assertEquals(Reward.Bolts(400), crate.value)
@@ -257,7 +257,7 @@ class EconomyTest {
         assertEquals(day, done.save.lastFirstWinDay)
         assertEquals(6, done.save.credits)
         assertEquals(10, done.save.progress(FighterId.BYTE).cups)
-        // The same day's second win pays no first-win Crystals.
+        // The same day's second win pays no first-win CPU Chips.
         assertEquals(0, Economy.settleMatch(done.save, report(GameMode.KNOCKOUT_RUSH, MatchOutcome.VICTORY), day).value.firstWinPrisms)
         // Applying it: Cups and drops are taken on, and the Cup Track reward that was just reached shows up.
         val (after, rewards) = Progression.applyMatch(done.save, report(GameMode.KNOCKOUT_RUSH, MatchOutcome.VICTORY, mvp = true), day, v)

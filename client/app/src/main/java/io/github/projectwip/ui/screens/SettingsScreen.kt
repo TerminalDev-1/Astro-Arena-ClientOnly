@@ -127,7 +127,7 @@ private fun GameplayTab(s: Settings, set: ((Settings) -> Settings) -> Unit) {
                         Spacer(Modifier.height(4.dp))
                         PlainText(d.blurb, Type.Small, color = Color.White.copy(alpha = 0.9f), maxLines = 5, align = androidx.compose.ui.text.style.TextAlign.Center)
                         Spacer(Modifier.height(4.dp))
-                        PlainText("Power Ups ×${d.boltMultiplier}", Type.Small, color = Palette.Gold, align = androidx.compose.ui.text.style.TextAlign.Center)
+                        PlainText("Upgrade Credits ×${d.boltMultiplier}", Type.Small, color = Palette.Gold, align = androidx.compose.ui.text.style.TextAlign.Center)
                     }
                 }
             }

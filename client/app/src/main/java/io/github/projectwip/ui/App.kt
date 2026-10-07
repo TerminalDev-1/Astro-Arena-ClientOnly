@@ -97,6 +97,9 @@ fun App(repo: GameRepository, game: LocalGame, sfx: Sfx, music: io.github.projec
                 "roster" -> { io.github.projectwip.ui.screens.rosterPreview = true; Screen.Fighters() }
                 "kito" -> Screen.Fighters(FighterId.KITO)
                 "varun" -> Screen.Fighters(FighterId.VARUN)
+                "buddy" -> Screen.Fighters(FighterId.BUDDY)
+                // The Training Area as Buddy, unlocked or not.
+                "trybuddy" -> Screen.Match(startMatchConfig(repo.save.value).copy(playerFighter = FighterId.BUDDY, playerSkin = 0, mode = io.github.projectwip.data.GameMode.TRAINING, boss = null))
                 // The Training Area as Varun, unlocked or not, for looking at him in play.
                 "tryvarun" -> Screen.Match(startMatchConfig(repo.save.value).copy(playerFighter = FighterId.VARUN, playerSkin = 0, mode = io.github.projectwip.data.GameMode.TRAINING, boss = null))
                 "shop" -> Screen.Shop
@@ -295,8 +298,8 @@ fun startMatchConfig(save: io.github.projectwip.data.SaveData): MatchConfig {
 }
 
 fun rewardLabel(r: Reward): String = when (r) {
-    is Reward.Bolts -> "+${r.amount} Power Ups"
-    is Reward.Prisms -> "+${r.amount} Crystals"
+    is Reward.Bolts -> "+${r.amount} Upgrade Credits"
+    is Reward.Prisms -> "+${r.amount} CPU Chips"
     is Reward.Credits -> "+${r.amount} Credits"
     is Reward.UnlockFighter -> "${Balance.fighter(r.fighter).name} unlocked!"
     is Reward.SkinReward -> "${Balance.fighter(r.fighter).skins[r.skinIndex].name} colorway"

@@ -150,7 +150,7 @@ class ProgressionTest {
         assertTrue(SparkRoad.steps.any { it.fighter == FighterId.KITO })
         val varun = Balance.fighter(FighterId.VARUN)
         assertEquals("six rockets a shot, eight in the super", 6 to 8, varun.attack.projectiles to varun.superSpec.projectiles)
-        assertEquals("the rarest fighter is the last one on the road", FighterId.VARUN, SparkRoad.steps.last().fighter)
+        assertEquals("the rarest fighter is the last one on the road", FighterId.BUDDY, SparkRoad.steps.last().fighter)
         assertTrue(CupTrack.milestones.none { it.reward is Reward.UnlockFighter })
         assertEquals(SparkRoad.steps.first(), SparkRoad.next(SaveData()))
         // The floor every fighter stands on: enough health, and enough damage from one ammo when it all lands.

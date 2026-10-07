@@ -7,6 +7,19 @@ data class NewsItem(val title: String, val date: String, val tag: String, val te
 object News {
     val items: List<NewsItem> = listOf(
         NewsItem(
+            "Buddy has gone rogue", "2026-10-07", "NEW",
+            "A new Ultra fighter waits at the end of the Spark Road: Buddy, an AI that went rogue. He smashes a whole " +
+                "computer into whoever is close, for the hardest single hit in the game. His super needs no aiming: it picks " +
+                "the nearest enemy in sight and compiles malformed code into them, a poison that stops their healing and " +
+                "never lets up until they are knocked out.",
+        ),
+        NewsItem(
+            "A Spark Road you can walk down, and new money", "2026-10-07", "NEW",
+            "The Spark Road is now a real 3D road: drag along it to see every fighter waiting on it. Glitch Drops give twelve " +
+                "times the Credits they used to. Power Ups are now Upgrade Credits, which pay for every upgrade, and Crystals " +
+                "are now CPU Chips.",
+        ),
+        NewsItem(
             "Chaos Command Center, Glitch Drops and a bigger Spark Road", "2026-10-07", "NEW",
             "Spark Drops are now Glitch Drops. The Spark Pass and Glory are gone: fill the Spark Road's Credit bar and the " +
                 "fighter unlocks on the spot (Rare 2,500 Credits, Epic 4,200, Mythic 6,500, Legendary 9,000, Ultra 13,000). " +

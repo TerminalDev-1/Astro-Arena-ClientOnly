@@ -70,7 +70,7 @@ object Progression {
 
     /**
      * Records a finished match. Cups and Glitch Drops come from the [verdict] ([Economy.settleMatch] has already put
-     * the Bolts, Crystals and Credits it paid into [save]).
+     * the Bolts, CPU Chips and Credits it paid into [save]).
      */
     fun applyMatch(save: SaveData, report: MatchReport, today: Long, verdict: MatchVerdict): Pair<SaveData, MatchRewards> {
         val newCups = (verdict.cups).coerceAtLeast(0)

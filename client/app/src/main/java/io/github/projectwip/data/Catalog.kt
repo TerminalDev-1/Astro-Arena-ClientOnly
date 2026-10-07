@@ -197,9 +197,9 @@ sealed interface ShopItem {
 
 object Shop {
     val boltCrates = listOf(
-        ShopItem.BoltCrate("crate_s", "Power Up Pouch", bolts = 400, pricePrisms = 10),
-        ShopItem.BoltCrate("crate_m", "Power Up Crate", bolts = 1200, pricePrisms = 25),
-        ShopItem.BoltCrate("crate_l", "Power Up Vault", bolts = 3000, pricePrisms = 50),
+        ShopItem.BoltCrate("crate_s", "Upgrade Credit Pouch", bolts = 400, pricePrisms = 10),
+        ShopItem.BoltCrate("crate_m", "Upgrade Credit Crate", bolts = 1200, pricePrisms = 25),
+        ShopItem.BoltCrate("crate_l", "Upgrade Credit Vault", bolts = 3000, pricePrisms = 50),
     )
 
     val creditPacks = listOf(

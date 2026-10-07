@@ -31,7 +31,7 @@ object Economy {
         if (!p.unlocked) throw Refused(409, "that fighter isn't unlocked")
         if (p.level >= if (noCap) Balance.LEVEL_LIMIT else Balance.MAX_LEVEL) throw Refused(409, "that fighter is at the top level")
         val cost = upgradeCost(p.level, factor)
-        if (save.bolts < cost) throw Refused(402, "not enough Power Ups")
+        if (save.bolts < cost) throw Refused(402, "not enough Upgrade Credits")
         return Done(save.copy(bolts = save.bolts - cost, fighters = save.fighters + (fighter to p.copy(level = p.level + 1))), cost)
     }
 
@@ -60,7 +60,7 @@ object Economy {
     /**
      * Credits go straight onto the Spark Road. The moment they cover the next fighter along it that fighter is
      * unlocked and what is left carries on toward the one after. Once every fighter is unlocked Credits have
-     * nowhere to go, so they are paid as Power Ups instead, one for one.
+     * nowhere to go, so they are paid as Upgrade Credits instead, one for one.
      */
     private fun fillRoad(save: SaveData, amount: Int): Done<Reward> {
         if (amount <= 0) return Done(save, Reward.Credits(0))
@@ -104,7 +104,7 @@ object Economy {
 
     // ---------------------------------------------------------------------------- the shop
 
-    /** The reward and Crystal price of a standing shop item, or null if there is no such item. */
+    /** The reward and CPU Chip price of a standing shop item, or null if there is no such item. */
     fun shopItem(key: String): Pair<Reward, Int>? {
         Shop.creditPacks.firstOrNull { it.key == key }?.let { return Reward.Credits(it.credits) to it.pricePrisms }
         Shop.boltCrates.firstOrNull { it.key == key }?.let { return Reward.Bolts(it.bolts) to it.pricePrisms }
@@ -113,12 +113,12 @@ object Economy {
         return null
     }
 
-    /** Buys a standing shop item with Crystals. */
+    /** Buys a standing shop item with CPU Chips. */
     fun buy(save: SaveData, key: String): Done<Reward> {
         val (reward, price) = shopItem(key) ?: throw Refused(404, "no such shop item")
         if (Progression.owns(save, reward)) throw Refused(409, "already owned")
         if (reward is Reward.SkinReward && !save.progress(reward.fighter).unlocked) throw Refused(409, "unlock the fighter first")
-        if (save.prisms < price) throw Refused(402, "not enough Crystals")
+        if (save.prisms < price) throw Refused(402, "not enough CPU Chips")
         return grant(save.copy(prisms = save.prisms - price), reward)
     }
 
@@ -142,8 +142,8 @@ object Economy {
         if (deal.limit in 1..purchased) throw Refused(409, "sold out")
         var s = save
         when (deal.currency) {
-            Currency.BOLTS -> { if (s.bolts < deal.price) throw Refused(402, "not enough Power Ups"); s = s.copy(bolts = s.bolts - deal.price) }
-            Currency.PRISMS -> { if (s.prisms < deal.price) throw Refused(402, "not enough Crystals"); s = s.copy(prisms = s.prisms - deal.price) }
+            Currency.BOLTS -> { if (s.bolts < deal.price) throw Refused(402, "not enough Upgrade Credits"); s = s.copy(bolts = s.bolts - deal.price) }
+            Currency.PRISMS -> { if (s.prisms < deal.price) throw Refused(402, "not enough CPU Chips"); s = s.copy(prisms = s.prisms - deal.price) }
             Currency.FREE -> {}
         }
         return grant(s, deal.reward)
@@ -183,11 +183,11 @@ object Economy {
     val dailyPool: List<CustomOffer> = listOf(
         CustomOffer(0, "Pocket Change", bolts = 60, currency = Currency.FREE),
         CustomOffer(0, "Lucky Find", prisms = 3, currency = Currency.FREE),
-        CustomOffer(0, "Power Up Pouch", bolts = 300, currency = Currency.PRISMS, price = 6, wasPrice = 10, theme = 1),
-        CustomOffer(0, "Power Up Crate", bolts = 1000, currency = Currency.PRISMS, price = 18, wasPrice = 25, theme = 1),
-        CustomOffer(0, "Power Up Haul", bolts = 2500, currency = Currency.PRISMS, price = 35, wasPrice = 50, theme = 2),
-        CustomOffer(0, "Crystal Pinch", prisms = 12, currency = Currency.BOLTS, price = 500, theme = 3),
-        CustomOffer(0, "Crystal Stack", prisms = 30, currency = Currency.BOLTS, price = 1200, wasPrice = 1500, theme = 3),
+        CustomOffer(0, "Upgrade Credit Pouch", bolts = 300, currency = Currency.PRISMS, price = 6, wasPrice = 10, theme = 1),
+        CustomOffer(0, "Upgrade Credit Crate", bolts = 1000, currency = Currency.PRISMS, price = 18, wasPrice = 25, theme = 1),
+        CustomOffer(0, "Upgrade Credit Haul", bolts = 2500, currency = Currency.PRISMS, price = 35, wasPrice = 50, theme = 2),
+        CustomOffer(0, "Chip Pinch", prisms = 12, currency = Currency.BOLTS, price = 500, theme = 3),
+        CustomOffer(0, "Chip Stack", prisms = 30, currency = Currency.BOLTS, price = 1200, wasPrice = 1500, theme = 3),
         CustomOffer(0, "Double Up", bolts = 400, prisms = 10, currency = Currency.PRISMS, price = 14, wasPrice = 20, theme = 4),
     )
     const val OFFERS_PER_DAY = 3
@@ -223,7 +223,7 @@ object Economy {
         return roundHalfUp((base + koBonus) * difficulty.boltMultiplier.toDouble())
     }
 
-    /** Crystals for the first victory of the day. Boss Mode and the Training Area don't count. */
+    /** CPU Chips for the first victory of the day. Boss Mode and the Training Area don't count. */
     fun firstWinPrisms(mode: GameMode, outcome: MatchOutcome, save: SaveData, day: Long): Int =
         if (mode == GameMode.BOSS || mode == GameMode.TRAINING || outcome != MatchOutcome.VICTORY || save.lastFirstWinDay == day) 0 else Balance.FIRST_WIN_PRISMS
 
@@ -245,7 +245,7 @@ object Economy {
     }
 
     /**
-     * Settles a finished match: what it pays in Bolts, Crystals, Credits and Spark Pass points goes into the save,
+     * Settles a finished match: what it pays in Bolts, CPU Chips, Credits and Spark Pass points goes into the save,
      * and the verdict says the rest (Cups and Glitch Drops are applied by [Progression.applyMatch] from it).
      */
     fun settleMatch(save: SaveData, report: MatchReport, day: Long): Done<MatchVerdict> {
@@ -277,6 +277,8 @@ object Economy {
     // ---------------------------------------------------------------------------- Glitch Drops
 
     private const val DROP_BUFF = 3
+    /** Every Credit amount a drop gives is multiplied by this: the Spark Road asks for thousands. */
+    const val CREDIT_BUFF = 12
     /** "Open all" opens the drops held at that moment; the pieces that split off wait for the next one. */
     const val MAX_OPEN_ALL = 10_000
     /** Pieces a drop splits into roll with this much extra luck and are never Scrap. */
@@ -304,8 +306,8 @@ object Economy {
         fun between(lo: Int, hi: Int) = rng.nextInt(lo, hi + 1)
         fun bolts(lo: Int, hi: Int): Reward = Reward.Bolts(between(lo, hi) / 5 * 5 * DROP_BUFF)
         fun prisms(lo: Int, hi: Int): Reward = Reward.Prisms(between(lo, hi) * DROP_BUFF)
-        // Credits unlock fighters on the Spark Road, and the buff leaves them alone: they are worth what the road charges.
-        fun credits(lo: Int, hi: Int): Reward = Reward.Credits(between(lo, hi))
+        // Credits unlock fighters on the Spark Road. Drops are the way to get them in any number.
+        fun credits(lo: Int, hi: Int): Reward = Reward.Credits(between(lo, hi) * CREDIT_BUFF)
         fun newSkin(): Reward? {
             val choices = FighterId.entries.filter { save.progress(it).unlocked }.flatMap { f ->
                 Balance.fighter(f).skins.indices.filter { it !in save.progress(f).ownedSkins }.map { Reward.SkinReward(f, it) }

@@ -3,8 +3,10 @@
 AstroArena, client-only edition (the package id is still `io.github.projectwip`, so saves carry over): original
 mobile 3D arena brawler for Android (landscape, touch, bots). Kotlin + Compose menus + custom OpenGL ES 3.0
 renderer, no engine. All art and sound is generated in code and must stay original: no Brawl Stars/Supercell
-assets, names, icons or UI copies. Fighters have first names only. Players see "Glitch Drops", "Power Ups" and
-"Crystals"; the code still calls them capsules, bolts and prisms.
+assets, names, icons or UI copies. Fighters have first names only. Players see "Glitch Drops", "Upgrade Credits" and
+"CPU Chips"; the code still calls them capsules, bolts and prisms. (Upgrade Credits were Power Ups and CPU Chips
+were Crystals: the user renamed them. Upgrade Credits pay for every fighter upgrade; their icon is the Credit card in
+amber. CPU Chips are the shop currency; their icon is a chip.)
 
 There is no server and no network access: the app has no INTERNET permission. Everything the old Python game
 server decided is done on the device (see "Game rules" below). Don't add networking back.
@@ -30,11 +32,12 @@ server decided is done on the device (see "Game rules" below). Don't add network
 
 - adb is at `/c/Users/gamer/AppData/Local/Android/Sdk/platform-tools/adb`; the tablet is on wireless debugging
   (`adb mdns services`, the port changes). Set `MSYS_NO_PATHCONV=1` for `adb shell`.
-- Start a screen directly: `adb shell am start -S -n io.github.projectwip/.MainActivity --es screen match`
-  (`match|boss|train|fighters|roster|kito|varun|shop|road|track|settings|result|news`; `roster` is the fighter grid with every model shown unlocked, `tryvarun` the Training Area as Varun, or `haul` to preview an "open all", or `capsule0`..`capsule5` to preview a capsule opening, suffix `s` splits into eight, `f` gives a fighter, `b` a bundle). Save file: `adb shell run-as io.github.projectwip cat files/save.json`.
+- Start a screen directly: `adb shell am start -S -n io.github.projectwip.offline/io.github.projectwip.MainActivity --es screen match`
+  (the application id is `io.github.projectwip.offline`, so it installs next to the original game)
+  (`match|boss|train|fighters|roster|kito|varun|buddy|shop|road|track|settings|result|news`; `roster` is the fighter grid with every model shown unlocked, `tryvarun` / `trybuddy` the Training Area as Varun / Buddy, or `haul` to preview an "open all", or `capsule0`..`capsule5` to preview a capsule opening, suffix `s` splits into eight, `f` gives a fighter, `b` a bundle). Save file: `adb shell run-as io.github.projectwip.offline cat files/save.json`.
 - UI changes must be checked with a screenshot (`adb exec-out screencap -p`) and `adb logcat -b crash -d`.
 - The tablet is the user's everyday device. Before every `input tap` or `am start`, confirm
-  `dumpsys window | grep mCurrentFocus` shows `io.github.projectwip` or the home screen (`com.miui.home`): on
+  `dumpsys window | grep mCurrentFocus` shows `io.github.projectwip.offline` or the home screen (`com.miui.home`): on
   the home screen the tablet is free, so starting the game is fine. In any other app, skip it and say so.
 - Phone-size check: `wm size 1080x2400 && wm density 420`, then always `wm size reset` / `wm density reset`.
 
@@ -48,6 +51,11 @@ server decided is done on the device (see "Game rules" below). Don't add network
 - Boss Mode bosses are their own things (`BossKind`, `Balance.bosses`), not giant fighters: each fights through
   moves of its own in `sim/Boss.kt` (telegraphed ground hazards, sweeps, rings, charges) and has its own model.
   Keep their names, looks and moves original.
+- Buddy (`FighterId.BUDDY`, Ultra, last on the Spark Road) is the user's own design: a rogue AI. His attack smashes a
+  computer into whoever is close (`AttackShape.SMASH`: one short, heavy shot drawn as a computer, `ShotStyle.COMPUTER`).
+  His super (`SuperKind.CORRUPT`) needs no aiming: it picks the nearest enemy in sight and poisons them (`Fighter.poisonBy`,
+  `World.stepPoison`): no healing, and it only ends with a knockout (a boss shakes it off after `POISON_GIANT_SECONDS`).
+  With nobody in sight the super isn't spent. His face is a hologram: a flat lit screen over a projector ring, no head.
 - Team code must not assume two teams when `rules.freeForAll`.
 - Every fighter has a hyper (`Control.hyper`, the `HYPER_*` numbers in `Balance.kt`): a third button that charges from
   main-attack hits. Shields are a share of health (`SHIELD_FRACTION`), and there are none in Boss Mode (`World.shields`).
@@ -68,17 +76,21 @@ server decided is done on the device (see "Game rules" below). Don't add network
   those into the calls the menus make, through `GameCall` (`ui/GameCall.kt`): `ask({ buy(key) }) { reward -> ... }`.
   Menus read the shop and the clock from `rememberAccount(save)`.
 - A match is played on the device and its report is its result: `GameRepository.applyMatch` settles it with
-  `Economy.settleMatch` (Bolts, Crystals, Credits, fighter Cups, Glitch Drop) and `Progression.applyMatch`
+  `Economy.settleMatch` (Bolts, CPU Chips, Credits, fighter Cups, Glitch Drop) and `Progression.applyMatch`
   (Cups, drop count, stats). Cups per mode are `Trophies`; they don't depend on bot difficulty. The Training Area
   pays nothing.
 - Prices and tables the menus show (`Balance.kt`, `Catalog.kt`) are the ones `Economy` charges, so there is one copy.
   A new fighter or skin needs a place on the Spark Road (`SparkRoad` in `Catalog.kt`, from rarity) and a price.
-- Fighters are unlocked on the Spark Road with Credits (or bought with Crystals): drops and the Cup Track pay
+- Fighters are unlocked on the Spark Road with Credits (or bought with CPU Chips): drops and the Cup Track pay
   Credits, never a fighter. Credits are not a wallet and must never be shown as one: they go straight onto the
   road toward the next fighter along it (a fixed order; rarity decides the cost: Rare 2,500, Epic 4,200, Mythic
   6,500, Legendary 9,000, Ultra 13,000), and the moment the bar is full that fighter is unlocked (`Economy.grant`),
-  with the leftover carried on. Once every fighter is unlocked Credits are paid as Power Ups. There is no Glory
+  with the leftover carried on. Once every fighter is unlocked Credits are paid as Upgrade Credits. Glitch Drops are
+  the main source: every Credit amount a drop gives is multiplied by `Economy.CREDIT_BUFF`. There is no Glory
   and no Spark Pass: both were removed on purpose.
+- The Spark Road screen is 3D: `LobbyShot.ROAD` draws a road in the lobby scene (`render3d/Lobby.kt`, off at
+  `ROAD_Z`) with every fighter standing along it, lit as far as the Credits have reached; `RoadScreen` only lays the
+  header, the summary and the card for the focused stop over it, and drags `LobbyParams.roadScroll`.
 - The Spark Road is our own take on a familiar idea. Keep its names, art and layout original.
 - Days are this device's calendar days (`GameRepository.today`); the day's offers are a fixed shuffle of
   `Economy.dailyPool` by day number, and they change at local midnight.
