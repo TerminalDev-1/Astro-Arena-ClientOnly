@@ -27,7 +27,7 @@ class Hazard(
  * Below half health it is enraged: it moves on to the next one sooner, and each move is bigger.
  *
  * The bot brain still walks the boss about; this decides everything it does to the player. It only draws on the
- * world's own random numbers, so the server's replay of a fight goes exactly as the device's did.
+ * world's own random numbers, so a fight with the same seed goes the same way every time.
  */
 internal class BossScript(private val w: World, private val me: Fighter) {
     private class Timed(val at: Float, val run: () -> Unit)

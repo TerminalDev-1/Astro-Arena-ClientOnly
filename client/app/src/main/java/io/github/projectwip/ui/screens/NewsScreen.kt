@@ -29,7 +29,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
-import io.github.projectwip.net.NewsItem
+import io.github.projectwip.data.News
+import io.github.projectwip.data.NewsItem
 import io.github.projectwip.ui.Badge
 import io.github.projectwip.ui.GameText
 import io.github.projectwip.ui.Palette
@@ -40,18 +41,10 @@ import io.github.projectwip.ui.ScreenHeader
 import io.github.projectwip.ui.Type
 import io.github.projectwip.ui.plateShape
 
-/** What's new: the items the game server is carrying (its `news.cfg`), newest first. Offline there is none to show. */
+/** What's new: the items in [News], newest first. */
 @Composable
 fun NewsScreen(go: (Screen) -> Unit) {
-    val server = io.github.projectwip.ui.LocalServer.current
-    /** Null while loading; empty when the server couldn't be asked or has nothing to say. */
-    var news by remember { androidx.compose.runtime.mutableStateOf<List<NewsItem>?>(null) }
-    // Asked again when the connection comes up, so opening the tab a moment too early still fills it.
-    val online = server?.status?.collectAsState()?.value?.online == true
-    LaunchedEffect(online) {
-        news = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { server?.news() }.orEmpty()
-    }
-    val items = news
+    val items = News.items
 
     Box(Modifier.fillMaxSize()) {
         io.github.projectwip.ui.LobbyShotEffect(io.github.projectwip.render3d.LobbyShot.BACKDROP)
@@ -61,18 +54,8 @@ fun NewsScreen(go: (Screen) -> Unit) {
             Row(Modifier.weight(1f).fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 14.dp), horizontalArrangement = Arrangement.Center) {
                 Panel(Modifier.widthIn(max = 860.dp).fillMaxHeight(), cut = 18.dp) {
                     Column(Modifier.fillMaxSize().padding(12.dp)) {
-                        when {
-                            items == null -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                GameText("LOADING…", Type.Title, outline = 3.5.dp)
-                            }
-                            items.isEmpty() -> Column(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                                GameText("NO NEWS RIGHT NOW", Type.Title, color = Palette.Gold, outline = 3.5.dp)
-                                Spacer(Modifier.height(6.dp))
-                                PlainText("News comes from the server. It will be here when you're online and there is some.", Type.Body, color = Color.White)
-                            }
-                            else -> LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                items(items) { NewsCard(it) }
-                            }
+                        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(items) { NewsCard(it) }
                         }
                     }
                 }

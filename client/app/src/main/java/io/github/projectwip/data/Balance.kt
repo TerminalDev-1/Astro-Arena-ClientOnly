@@ -22,8 +22,7 @@ enum class AttackShape { BURST, SPREAD, LANCE, ROCKETS }
 enum class BossKind { BARRAGE, SWEEPER, STAMPEDE }
 
 /**
- * How rare a fighter is. Rarer fighters take more Credits on the Spark Road ([roadCost]; the server's own table
- * in `economy.py` is the one that counts). The fighter everyone starts with has no rarity of its own.
+ * How rare a fighter is. Rarer fighters take more Credits on the Spark Road ([roadCost]). The fighter everyone starts with has no rarity of its own.
  */
 enum class Rarity(val label: String, val color: Long, val roadCost: Int) {
     STARTER("Starter", 0xFF9BE7FF, 0),
@@ -138,8 +137,6 @@ enum class GameMode(val title: String, val tagline: String, val players: Int) {
     BOSS("Boss Mode", "You against a boss · unlimited lives", 2),
     /** Practice: dummies, a swarm and a boss that just stand there, plus one sentry gun. No timer, nothing won or lost. */
     TRAINING("Training Area", "Dummies, a swarm, a sentry and a boss · no stakes", 19),
-    /** One real player against another, each on their own device. Nothing is earned in it yet. */
-    DUEL("1v1", "You against one real player · first to 3 knockouts", 2),
 }
 
 object Balance {
@@ -224,7 +221,7 @@ object Balance {
     const val STORM_DAMAGE_BASE = 0.10f
     const val STORM_DAMAGE_GROWTH = 0.002f
 
-    /** Prisms for the first victory each calendar day (the server pays them; this is for showing it). */
+    /** Prisms for the first victory each calendar day (see [Economy.firstWinPrisms]). */
     const val FIRST_WIN_PRISMS = 10
 
     // The floor every fighter stands on, so that fights are even: at least [MIN_HEALTH] health, and at least

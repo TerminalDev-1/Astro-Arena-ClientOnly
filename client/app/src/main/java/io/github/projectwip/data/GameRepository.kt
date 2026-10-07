@@ -8,55 +8,36 @@ import java.util.concurrent.Executors
 
 /**
  * Single source of truth for the player's progress. The UI observes [save];
- * every mutation goes through [Progression] and is persisted immediately on a background thread.
+ * every mutation goes through [Economy] / [Progression] and is persisted immediately on a background thread.
  */
 class GameRepository(private val store: SaveStore) {
     private val io = Executors.newSingleThreadExecutor { r -> Thread(r, "save-io").apply { isDaemon = true } }
     private val _save = MutableStateFlow(store.load())
     val save: StateFlow<SaveData> = _save.asStateFlow()
 
-    /** The day the server says it is, once it has said so. Days (the daily gift, the day's drops) are the server's. */
-    @Volatile var serverDay: Long? = null
-
-    /** Today's number: the server's when known, this device's otherwise. */
-    val today: Long get() = serverDay ?: LocalDate.now().toEpochDay()
-
-    /** Called with every new save (the server connection uses it to upload a copy). */
-    var onCommit: ((SaveData) -> Unit)? = null
+    /** Today's number: days since 1970 on this device's calendar. The daily gift, the day's drops and offers all count by it. */
+    val today: Long get() = LocalDate.now().toEpochDay()
 
     private fun commit(next: SaveData) {
         _save.value = next
         io.execute { store.write(next) }
-        onCommit?.invoke(next)
     }
 
-    /** Replaces the whole save with one restored from the server, keeping this device's own settings. */
-    fun restore(fromServer: SaveData) = commit(fromServer.copy(settings = _save.value.settings))
+    /** Runs [change] on the current save and keeps the result. A [Refused] change leaves the save as it was. */
+    @Synchronized
+    fun <T> transact(change: (SaveData) -> Done<T>): T {
+        val done = change(_save.value)
+        if (done.save != _save.value) commit(done.save)
+        return done.value
+    }
 
-    /** [verdict] is what the server awarded; null for an offline match. */
-    fun applyMatch(report: MatchReport, verdict: ServerVerdict?): MatchRewards {
-        val (next, rewards) = Progression.applyMatch(_save.value, report, today, verdict)
+    /** Settles a finished match (what it paid, its Cups and any Spark Drop) and returns what the result screen shows. */
+    @Synchronized
+    fun applyMatch(report: MatchReport): MatchRewards {
+        val settled = Economy.settleMatch(_save.value, report, today)
+        val (next, rewards) = Progression.applyMatch(settled.save, report, today, settled.value)
         commit(next)
         return rewards
-    }
-
-    /** Counts a Spark Drop the server opened. */
-    fun dropOpened(count: Int = 1) = commit(Progression.dropOpened(_save.value, count))
-
-    /** Takes on what the server holds for this player (Cups, drops, and when given the profile and shop deals). */
-    fun syncAccount(
-        cups: Int, drops: Int, dropsLeftToday: Int, profile: ServerProfile? = null, deals: List<CustomOffer>? = null,
-        difficulty: BotDifficulty? = null, day: Long? = null,
-    ) {
-        if (day != null) serverDay = day
-        val next = Progression.syncAccount(_save.value, cups, drops, dropsLeftToday, today, profile, deals, difficulty)
-        if (next != _save.value) commit(next)
-    }
-
-    /** Switches the debug menu's cheats off, if any are on. */
-    fun clearCheats() {
-        val clean = Progression.withoutCheats(_save.value.settings)
-        if (clean != _save.value.settings) commit(_save.value.copy(settings = clean))
     }
 
     val capsulesLeftToday: Int get() = Progression.capsulesLeftToday(_save.value, today)
@@ -72,6 +53,6 @@ class GameRepository(private val store: SaveStore) {
 
     fun updateSettings(transform: (Settings) -> Settings) = commit(_save.value.copy(settings = transform(_save.value.settings)))
 
-    /** Wipes what is kept on this device (after the server has started the account over), keeping settings. */
+    /** Wipes progress (Cups, levels, currencies, claims), keeping settings. */
     fun resetProgress() = commit(SaveData(settings = _save.value.settings, capsuleSeed = System.nanoTime()))
 }

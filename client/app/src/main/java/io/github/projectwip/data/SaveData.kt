@@ -16,7 +16,7 @@ data class ControlLayout(
 }
 
 data class Settings(
-    /** The difficulty the server last approved for this player. Picking another one asks the server first. */
+    /** How tough the bots are. */
     val botDifficulty: BotDifficulty = BotDifficulty.NORMAL,
     val sfxVolume: Float = 0.8f,
     val musicVolume: Float = 0.5f,
@@ -38,8 +38,6 @@ data class Settings(
     /** The player has picked their name (new players are asked before their account is made). */
     val nameChosen: Boolean = false,
     val controlLayout: ControlLayout = ControlLayout(),
-    /** Address of the game server, e.g. http://192.168.1.103:8765. Blank = the address this build was made with. */
-    val serverUrl: String = "",
     /** Unlocked: touching anywhere on the right half of the screen is the attack stick. */
     val attackStickMode: MoveStickMode = MoveStickMode.FLOATING,
     /** Debug menu: 0 = normal capsule odds; each point multiplies the weight of every tier above the last. */
@@ -68,7 +66,7 @@ data class SaveData(
     val bestCups: Int = 0,
     val bolts: Int = Balance.STARTING_BOLTS,
     val prisms: Int = Balance.STARTING_PRISMS,
-    /** Credits on the Spark Road, toward the next fighter along it; a copy of what the server holds. Not a wallet: they can only become that fighter. */
+    /** Credits on the Spark Road, toward the next fighter along it. Not a wallet: they can only become that fighter. */
     val credits: Int = 0,
     /** What Credits are earned as once every fighter is unlocked. */
     val glory: Int = 0,
@@ -97,6 +95,14 @@ data class SaveData(
     val boostedCapsules: Int = 0,
     /** Seeds the next capsule roll; stored so reloading the game can't re-roll a capsule. */
     val capsuleSeed: Long = 0,
+    /** The Spark Pass season [passPoints] and [passClaimed] belong to (-1 = none yet); a new season starts from nothing. */
+    val passSeason: Long = -1,
+    val passPoints: Int = 0,
+    /** Spark Pass tiers (1-based) whose reward has been claimed this season. */
+    val passClaimed: Set<Int> = emptySet(),
+    /** The day [dailyBought] counts for, and the titles of today's offers already bought. */
+    val dailyDay: Long = -1,
+    val dailyBought: Set<String> = emptySet(),
 ) {
     fun progress(id: FighterId): FighterProgress = fighters[id] ?: FighterProgress()
 

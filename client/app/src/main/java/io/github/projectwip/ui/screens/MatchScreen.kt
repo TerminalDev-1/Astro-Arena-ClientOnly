@@ -51,21 +51,7 @@ data class PlayerLine(
     val boss: io.github.projectwip.data.BossKind? = null,
 )
 
-data class MatchSummary(
-    val report: MatchReport, val players: List<PlayerLine>, val playerTeam: Int, val serverMatchId: Long = 0,
-    /** What the player did, tick by tick: the server replays the match from this. */
-    val inputs: ByteArray? = null,
-    /** A 1v1 against a real player: the line to the lobby, which says what the match was worth. */
-    val duel: io.github.projectwip.net.DuelLink? = null,
-    /** A match played with a team of real players: the line to them, which says what the match was worth. */
-    val team: io.github.projectwip.net.TeamLink? = null,
-) {
-    /** This summary with the server's findings in place of the device's own. */
-    fun judged(j: io.github.projectwip.data.JudgedResult): MatchSummary = copy(
-        report = j.over(report),
-        players = players.map { if (it.isPlayer) it.copy(kos = j.kos, deaths = j.deaths, damage = j.damage, placement = j.placement) else it },
-    )
-}
+data class MatchSummary(val report: MatchReport, val players: List<PlayerLine>, val playerTeam: Int)
 
 fun summarize(match: Match, report: MatchReport): MatchSummary {
     // Free-for-all: the star goes to the last fighter standing; team modes use the contribution score.
@@ -77,119 +63,23 @@ fun summarize(match: Match, report: MatchReport): MatchSummary {
                 placement = if (it === match.player) report.placement else it.placement, boss = it.def.boss)
         },
         match.player.team,
-        match.config.serverMatchId,
-        match.inputs.toBytes(),
     )
 }
 
 /**
- * Starts a match. The game server is asked to set it up first (its seed, which fixes the bots, their names
- * and how tough they are); if there is no server, or it doesn't answer quickly, the match is set up on the
- * device instead and counts as an offline match. While that happens, and for a few seconds after, the
- * matchmaking screen shows the line-up filling in; [onCancel] backs out of it.
+ * Starts a match. Last Spark and Knockout Rush show the matchmaking screen, with the line-up of bots filling in;
+ * [onCancel] backs out of it. Boss Mode and the Training Area go straight in.
  */
 @Composable
 fun MatchScreen(
     config: MatchConfig, settings: Settings, sfx: Sfx, matchesPlayed: Int,
-    server: io.github.projectwip.net.GameServer?, onCancel: () -> Unit, onFinish: (MatchSummary) -> Unit,
-    team: io.github.projectwip.net.TeamLink? = null,
+    onCancel: () -> Unit, onFinish: (MatchSummary) -> Unit,
 ) {
-    // A team's match is set up by the lobby and starts on every device at once: there is nothing to find.
-    if (config.team != null && team != null) {
-        val shared = remember { Match(config) }
-        MatchBody(shared, settings, sfx, matchesPlayed, onFinish, team = team)
-        return
-    }
-    // Decided once, as the match is asked for: online it is against a real player, offline against a bot for practice.
-    // (If the connection is still coming up, it gets a few seconds to, so a 1v1 asked for at start-up isn't offline.)
-    var duelOnline by remember {
-        mutableStateOf(if (config.mode != io.github.projectwip.data.GameMode.DUEL || server == null) false else if (server.status.value.online) true else null)
-    }
-    LaunchedEffect(Unit) {
-        if (duelOnline != null) return@LaunchedEffect
-        repeat(60) {
-            if (server?.status?.value?.online == true) { duelOnline = true; return@LaunchedEffect }
-            kotlinx.coroutines.delay(100)
-        }
-        duelOnline = false
-    }
-    if (duelOnline == null) {
-        Box(Modifier.fillMaxSize().background(Color(0xFF1C143A)), contentAlignment = Alignment.Center) { GameText("CONNECTING…", Type.Title, outline = 3.5.dp) }
-        return
-    }
-    if (duelOnline == true && server != null) {
-        DuelMatch(config, settings, sfx, matchesPlayed, server, onCancel, onFinish)
-        return
-    }
-    var match by remember { mutableStateOf<Match?>(null) }
+    val match = remember { Match(config) }
     var started by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        val plan = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            server?.planMatch(config.mode, config.playerFighter, config.playerLevel, config.difficulty, config.boss)
-        }
-        val planned = if (plan == null) config
-            else config.copy(
-                seed = plan.seed, botNames = plan.botNames, serverMatchId = plan.matchId,
-                difficulty = plan.difficulty ?: config.difficulty, playerLevel = plan.level ?: config.playerLevel,
-            )
-        match = Match(planned)
-    }
-    val ready = match
-    // Boss Mode and the Training Area have nobody to find: they go straight in.
     val matchmade = config.mode == io.github.projectwip.data.GameMode.LAST_SPARK || config.mode == io.github.projectwip.data.GameMode.KNOCKOUT_RUSH
-    if (ready != null && (started || !matchmade)) MatchBody(ready, settings, sfx, matchesPlayed, onFinish)
-    else if (matchmade) Matchmaking(config, ready, onCancel) { started = true }
-    else Box(Modifier.fillMaxSize().background(Color(0xFF1C143A)), contentAlignment = Alignment.Center) {
-        GameText("LOADING THE ARENA…", Type.Title, outline = 3.5.dp)
-    }
-}
-
-/**
- * A 1v1 against a real player: joins the server's lobby, waits there for someone else to join, then plays the
- * match in step with their device. Leaving the match hangs up, which hands the other player the win and its Cups.
- */
-@Composable
-private fun DuelMatch(
-    config: MatchConfig, settings: Settings, sfx: Sfx, matchesPlayed: Int,
-    server: io.github.projectwip.net.GameServer, onCancel: () -> Unit, onFinish: (MatchSummary) -> Unit,
-) {
-    val link = remember { server.duelLink() }
-    var match by remember { mutableStateOf<Match?>(null) }
-    var problem by remember { mutableStateOf<String?>(null) }
-    val time by io.github.projectwip.ui.rememberAnimTime()
-    LaunchedEffect(Unit) {
-        if (link == null) { problem = "The 1v1 lobby is on the game server, and it can't be reached right now."; return@LaunchedEffect }
-        val start = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { link.find(server.duelHello(config.playerFighter, config.playerSkin)) }
-        if (start == null) problem = link.error ?: "Couldn't join the 1v1 lobby. Is the server's 1v1 port (its port + 1) open on the network?"
-        else match = Match(config.copy(seed = start.seed, playerLevel = start.level, duel = start.setup, humanPlayer = true))
-    }
-    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { link?.close() } }
-    val ready = match
-    if (ready != null) { MatchBody(ready, settings, sfx, matchesPlayed, onFinish, link); return }
-    BackHandler(onBack = onCancel)
-    val me = io.github.projectwip.data.Balance.fighter(config.playerFighter)
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        io.github.projectwip.ui.GameBackground(Modifier.fillMaxSize())
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            PlainText("1V1 · " + config.mode.tagline, Type.Label, color = io.github.projectwip.ui.Palette.TextDim)
-            Box(Modifier.size(220.dp), contentAlignment = Alignment.Center) {
-                io.github.projectwip.ui.FighterRays(Modifier.fillMaxSize(), Color(me.skins[config.playerSkin.coerceIn(0, me.skins.lastIndex)].secondary))
-                io.github.projectwip.ui.FighterView(me, config.playerSkin, Modifier.fillMaxSize(), pedestal = false)
-            }
-            val p = problem
-            if (p == null) {
-                GameText("WAITING FOR AN OPPONENT" + ".".repeat(1 + (time * 2.5f).toInt() % 3), Type.Title, outline = 3.5.dp, modifier = Modifier.width(520.dp))
-                PlainText("The match starts as soon as another player on this server picks 1v1. It waits for a real player, however long that takes.", Type.Body, color = Color.White, align = TextAlign.Center, modifier = Modifier.width(560.dp))
-                // (Read every frame, as the dots animate: the lobby may say why nobody is being found.)
-                link?.note?.let { PlainText(it, Type.Body, color = io.github.projectwip.ui.Palette.Red, align = TextAlign.Center, modifier = Modifier.width(560.dp)) }
-                PlainText("Played for Cups: the winner takes them, and leaving a match counts as a defeat.", Type.Small, color = io.github.projectwip.ui.Palette.Gold)
-            } else {
-                GameText("NO 1V1 RIGHT NOW", Type.Title, color = io.github.projectwip.ui.Palette.Gold, outline = 3.5.dp)
-                PlainText(p, Type.Body, color = Color.White, align = TextAlign.Center, modifier = Modifier.width(520.dp))
-            }
-            ChunkyButton(onCancel, Modifier.size(200.dp, 52.dp), ButtonStyle.RED, lip = 4.dp, sound = io.github.projectwip.audio.Sound.UI_BACK) { GameText(if (p == null) "CANCEL" else "BACK", Type.Heading) }
-        }
-    }
+    if (started || !matchmade) MatchBody(match, settings, sfx, matchesPlayed, onFinish)
+    else Matchmaking(config, match, onCancel) { started = true }
 }
 
 /**
@@ -197,7 +87,7 @@ private fun DuelMatch(
  * match is found. The opponents are bots, and the screen says so. [match] is null until the match is set up.
  */
 @Composable
-private fun Matchmaking(config: MatchConfig, match: Match?, onCancel: () -> Unit, onFound: () -> Unit) {
+private fun Matchmaking(config: MatchConfig, match: Match, onCancel: () -> Unit, onFound: () -> Unit) {
     val sfx = io.github.projectwip.ui.LocalSfx.current
     val time by io.github.projectwip.ui.rememberAnimTime()
     val total = config.mode.players
@@ -207,7 +97,6 @@ private fun Matchmaking(config: MatchConfig, match: Match?, onCancel: () -> Unit
     val tip = remember { TIPS.random() }
     BackHandler(enabled = !done, onBack = onCancel)
     LaunchedEffect(match) {
-        if (match == null) return@LaunchedEffect
         val pace = kotlin.random.Random(match.config.seed)
         kotlinx.coroutines.delay(500)
         while (found < total) {
@@ -244,18 +133,18 @@ private fun Matchmaking(config: MatchConfig, match: Match?, onCancel: () -> Unit
                     modifier = Modifier.width(440.dp),
                 )
                 // The line-up: your slot is first, the rest fill in as opponents are found.
-                val others = match?.world?.fighters?.filter { it !== match.player }.orEmpty()
+                val others = match.world.fighters.filter { it !== match.player }
                 val perRow = if (total > 6) 5 else 3
                 for (row in (0 until total).chunked(perRow)) {
                     androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
                         for (i in row) {
-                            val fighter = if (i == 0) match?.player else others.getOrNull(i - 1)
+                            val fighter = if (i == 0) match.player else others.getOrNull(i - 1)
                             Slot(if (i < found) fighter else null, i == 0, time + i, Modifier.weight(1f, fill = false).width(112.dp))
                         }
                     }
                 }
                 GameText("$found / $total FIGHTERS", Type.Heading, color = io.github.projectwip.ui.Palette.Gold, outline = 2.5.dp)
-                PlainText(if (match != null && match.config.serverMatchId <= 0L) "Offline match against bots · practice, nothing is earned" else "Your opponents are bots, picked by the server", Type.Small)
+                PlainText("Your opponents are bots", Type.Small)
                 Spacer(Modifier.height(2.dp))
                 PlainText(tip, Type.Body, color = Color.White, align = TextAlign.Center)
                 if (!done) ChunkyButton(onCancel, Modifier.size(200.dp, 52.dp), ButtonStyle.RED, lip = 4.dp, sound = io.github.projectwip.audio.Sound.UI_BACK) { GameText("CANCEL", Type.Heading) }
@@ -282,12 +171,7 @@ private fun Slot(fighter: io.github.projectwip.sim.Fighter?, you: Boolean, phase
 }
 
 @Composable
-private fun MatchBody(
-    match: Match, settings: Settings, sfx: Sfx, matchesPlayed: Int, onFinish: (MatchSummary) -> Unit,
-    duel: io.github.projectwip.net.DuelLink? = null, team: io.github.projectwip.net.TeamLink? = null,
-) {
-    /** Other real players are in this match: it can't be stopped for one of them. */
-    val shared = duel != null || team != null
+private fun MatchBody(match: Match, settings: Settings, sfx: Sfx, matchesPlayed: Int, onFinish: (MatchSummary) -> Unit) {
     var paused by remember { mutableStateOf(false) }
     var view by remember { mutableStateOf<MatchView?>(null) }
     var done by remember { mutableStateOf(false) }
@@ -301,14 +185,12 @@ private fun MatchBody(
         if (done) return
         done = true
         view?.paused = true
-        onFinish(summarize(match, report).copy(duel = duel, team = team))
+        onFinish(summarize(match, report))
     }
 
     BackHandler(enabled = !done) {
         if (intro) return@BackHandler
         paused = !paused
-        // A 1v1 can't be stopped: the other player is still playing. The menu opens over the running match.
-        if (shared) return@BackHandler
         if (paused) view?.paused = true else view?.resumeGame()
     }
 
@@ -316,9 +198,8 @@ private fun MatchBody(
         AndroidView(
             factory = { ctx ->
                 MatchView(ctx, match, settings, sfx, matchesPlayed,
-                    onPauseRequested = { if (!done && !intro) { paused = true; if (!shared) view?.paused = true } },
+                    onPauseRequested = { if (!done && !intro) { paused = true; view?.paused = true } },
                     onFinished = { report -> finish(report) },
-                    duel = duel, team = team,
                 ).also { view = it; it.paused = intro }
             },
             modifier = Modifier.fillMaxSize(),
@@ -329,9 +210,9 @@ private fun MatchBody(
                 Panel(cut = 20.dp) {
                     Column(Modifier.padding(26.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         GameText("PAUSED", Type.Display, outline = 4.dp)
-                        PlainText(if (match.practice) "Nothing is at stake in the Training Area. Leave whenever you like." else if (team != null) "The match is still going: your team can't be paused. Leaving counts as a defeat for you, and they play on without you." else if (duel != null) "The match is still going: your opponent can't be paused. Leaving hands them the win, and costs you Cups." else "Bots wait for you. Leaving now counts as a defeat.", Type.Body, align = TextAlign.Center)
+                        PlainText(if (match.practice) "Nothing is at stake in the Training Area. Leave whenever you like." else "Bots wait for you. Leaving now counts as a defeat.", Type.Body, align = TextAlign.Center)
                         Spacer(Modifier.height(4.dp))
-                        ChunkyButton({ paused = false; if (!shared) view?.resumeGame() }, Modifier.size(260.dp, 64.dp), ButtonStyle.GREEN) { GameText("RESUME", Type.Title) }
+                        ChunkyButton({ paused = false; view?.resumeGame() }, Modifier.size(260.dp, 64.dp), ButtonStyle.GREEN) { GameText("RESUME", Type.Title) }
                         ChunkyButton({ finish(match.forfeit()) }, Modifier.size(260.dp, 54.dp), ButtonStyle.RED) {
                             GameText("LEAVE MATCH", Type.Heading)
                         }

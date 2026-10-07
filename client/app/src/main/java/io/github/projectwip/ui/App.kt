@@ -54,6 +54,7 @@ import io.github.projectwip.data.CapsuleResult
 import io.github.projectwip.data.CapsuleTier
 import io.github.projectwip.data.FighterId
 import io.github.projectwip.data.GameRepository
+import io.github.projectwip.data.LocalGame
 import io.github.projectwip.data.MatchRewards
 import io.github.projectwip.data.Reward
 import io.github.projectwip.sim.MatchConfig
@@ -72,13 +73,11 @@ sealed interface Screen {
     data object Home : Screen { override val depth = 0 }
     data class Fighters(val focus: FighterId? = null) : Screen { override val depth = 1 }
     data object CupTrack : Screen { override val depth = 1 }
-    data object Leaderboard : Screen { override val depth = 1 }
     data object News : Screen { override val depth = 1 }
     data object Shop : Screen { override val depth = 1 }
     data object Road : Screen { override val depth = 2 }
     data object Pass : Screen { override val depth = 1 }
     data object Settings : Screen { override val depth = 1 }
-    data object Team : Screen { override val depth = 1 }
     data class Match(val config: MatchConfig) : Screen { override val depth = 2 }
     data class Result(val summary: MatchSummary, val rewards: MatchRewards) : Screen { override val depth = 3 }
 }
@@ -87,14 +86,13 @@ sealed interface Screen {
 data class RewardReveal(val title: String, val reward: Reward)
 
 @Composable
-fun App(repo: GameRepository, sfx: Sfx, music: io.github.projectwip.audio.Music, server: io.github.projectwip.net.GameServer, startScreen: String? = null) {
+fun App(repo: GameRepository, game: LocalGame, sfx: Sfx, music: io.github.projectwip.audio.Music, startScreen: String? = null) {
     val save by repo.save.collectAsState()
     var screen by remember {
         mutableStateOf(
             when (startScreen) {
                 "match" -> Screen.Match(startMatchConfig(repo.save.value))
                 "boss" -> Screen.Match(startMatchConfig(repo.save.value).copy(mode = io.github.projectwip.data.GameMode.BOSS))
-                "duel" -> Screen.Match(startMatchConfig(repo.save.value).copy(mode = io.github.projectwip.data.GameMode.DUEL, boss = null))
                 "train" -> Screen.Match(startMatchConfig(repo.save.value).copy(mode = io.github.projectwip.data.GameMode.TRAINING))
                 "fighters" -> Screen.Fighters()
                 "roster" -> { io.github.projectwip.ui.screens.rosterPreview = true; Screen.Fighters() }
@@ -107,7 +105,6 @@ fun App(repo: GameRepository, sfx: Sfx, music: io.github.projectwip.audio.Music,
                 "pass" -> Screen.Pass
                 "track" -> Screen.CupTrack
                 "settings" -> Screen.Settings
-                "leaders" -> Screen.Leaderboard
                 "news" -> Screen.News
                 "result" -> previewResult(repo.save.value)
                 else -> Screen.Home
@@ -130,89 +127,39 @@ fun App(repo: GameRepository, sfx: Sfx, music: io.github.projectwip.audio.Music,
         })
     }
 
-    // ---- start-up: connect to the game server, ask GitHub whether a newer release exists, load sounds and music
-    val serverStatus by server.status.collectAsState()
-    val account = serverStatus.account
-    // The debug menu and its cheats belong to developers, and the server says who those are. A dev build is not enough.
-    val dev = account?.developer == true
+    // ---- start-up: load sounds and music
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    var unsupportedSkipped by remember { mutableStateOf(false) }
-    // A disabled account gets nothing: no menus, no offline play. The notice stays up until the server lets it back in.
-    // Debug: `--es screen disabled` shows the notice with made-up details.
-    val disabledShown = serverStatus.disabled || startScreen == "disabled"
     var booting by remember { mutableStateOf(true) }
     var bootProgress by remember { mutableStateOf(0f) }
-    var bootStatus by remember { mutableStateOf("Connecting to server…") }
-    var connection by remember { mutableStateOf(Connection.CONNECTING) }
-    var connectAttempt by remember { mutableStateOf(0) }
-    // A new player picks their name first; only then is an account made for them on the server.
-    var needsName by remember {
-        val settings = repo.save.value.settings
-        mutableStateOf(!settings.nameChosen && !server.hasAccount(settings.serverUrl.ifBlank { io.github.projectwip.BuildConfig.SERVER_URL }))
-    }
-    var update by remember {
-        // Debug: `--es screen update` shows the update screen with made-up details.
-        mutableStateOf(if (startScreen == "update") io.github.projectwip.net.UpdateInfo("9.9.9-preview", "## New\n- Example note one\n- Example note two", REPO_RELEASES, REPO_RELEASES) else null)
-    }
-    // The server: is this version welcome, sign in, fetch live settings, and sync the save. The game keeps trying
-    // for a minute; after that the player chooses between trying again and offline mode.
-    LaunchedEffect(connectAttempt, needsName) {
-        if (needsName) return@LaunchedEffect
-        val started = System.currentTimeMillis()
-        connection = Connection.CONNECTING
-        while (true) {
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { connectToServer(server, repo) }
-            if (connection != Connection.CONNECTING) break // the player stopped waiting
-            val now = server.status.value
-            if (now.online || !now.supported || now.disabled || now.url.isEmpty()) { connection = Connection.SETTLED; break }
-            if (System.currentTimeMillis() - started >= CONNECT_PATIENCE_MS) { connection = Connection.FAILED; break }
-            delay(1500)
-        }
-    }
+    var bootStatus by remember { mutableStateOf("Building sound effects…") }
+    // A new player picks their name first.
+    var needsName by remember { mutableStateOf(!repo.save.value.settings.nameChosen) }
     LaunchedEffect(Unit) {
-        val checked = java.util.concurrent.atomic.AtomicBoolean(false)
-        // Debug: `--es screen updatecheck` runs the real check pretending to be a very old version.
-        val running = if (startScreen == "updatecheck") "0.0.1" else io.github.projectwip.BuildConfig.VERSION_CODE.toString()
-        launch(kotlinx.coroutines.Dispatchers.IO) {
-            val found = io.github.projectwip.net.Updater.check(running)
-            if (found != null) update = found
-            checked.set(true)
-        }
         val started = System.currentTimeMillis()
         while (true) {
             val waited = System.currentTimeMillis() - started
-            val settled = connection == Connection.SETTLED
-            val target = 0.15f * (if (settled) 1f else (waited / CONNECT_PATIENCE_MS.toFloat()).coerceAtMost(0.9f)) +
-                0.1f * (if (checked.get()) 1f else (waited / 4000f).coerceAtMost(0.9f)) + 0.55f * sfx.progress + 0.2f * (if (music.ready) 1f else 0f)
+            val target = 0.7f * sfx.progress + 0.3f * (if (music.ready) 1f else 0f)
             // The bar only ever moves forward, and eases toward the real figure so it doesn't jump.
             bootProgress = maxOf(bootProgress, bootProgress + (target - bootProgress) * 0.2f)
             bootStatus = when {
-                !settled -> "Connecting to server…"
-                !checked.get() -> "Checking for updates…"
                 sfx.progress < 1f -> "Building sound effects…"
                 !music.ready -> "Composing the lobby music…"
                 else -> "Ready!"
             }
-            val done = settled && checked.get() && sfx.progress >= 1f && music.ready
-            // Stay up long enough to be read; once the server question is settled, never hang on anything else.
-            if ((done && waited > 1200 && bootProgress > 0.985f) || (settled && waited > 15000)) break
+            // Stay up long enough to be read.
+            if (sfx.progress >= 1f && music.ready && waited > 1200 && bootProgress > 0.985f) break
             delay(40)
         }
         bootProgress = 1f
         booting = false
     }
 
-    // Cups, Spark Drops, currencies, fighters and shop deals are the server's: whatever it says this player has is what the game shows.
-    LaunchedEffect(account) { account?.let { repo.sync(it) } }
-    // Anyone who isn't a developer plays without the debug menu's cheats, even if their save has some switched on.
-    LaunchedEffect(dev, booting) { if (!booting && !dev) repo.clearCheats() }
-    // Offline in the menus: quietly keep trying to get back online.
-    val inMatch = screen is Screen.Match
-    LaunchedEffect(serverStatus.online, serverStatus.supported, booting, inMatch) {
-        if (booting || inMatch || serverStatus.online || !serverStatus.supported) return@LaunchedEffect
-        while (true) {
-            delay(20_000)
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { connectToServer(server, repo) }
+    // The debug menu and its cheats are in Settings > Developer. With the menu off the cheats are off too.
+    val devMenu = save.settings.devMenu
+    LaunchedEffect(devMenu, booting) {
+        val s = repo.save.value.settings
+        if (!booting && !devMenu && (s.debugLuck != 0f || s.debugInfiniteCapsules || s.debugNoLevelCap || s.debugUpgradeCost != 1f)) {
+            repo.updateSettings { it.copy(debugLuck = 0f, debugInfiniteCapsules = false, debugNoLevelCap = false, debugUpgradeCost = 1f) }
         }
     }
 
@@ -229,54 +176,23 @@ fun App(repo: GameRepository, sfx: Sfx, music: io.github.projectwip.audio.Music,
         is Screen.Result -> if (s.summary.report.outcome == io.github.projectwip.data.MatchOutcome.VICTORY) io.github.projectwip.audio.Track.VICTORY else io.github.projectwip.audio.Track.DEFEAT
         else -> io.github.projectwip.audio.Track.LOBBY
     }
-    val blocked = update != null || (!serverStatus.supported && !unsupportedSkipped) || (disabledShown && !inMatch)
-    LaunchedEffect(wantedTrack, booting, blocked) { music.play(if (booting || blocked) null else wantedTrack) }
+    LaunchedEffect(wantedTrack, booting) { music.play(if (booting) null else wantedTrack) }
 
-    /** The team of real players this player is in, if any. It outlasts the screens and the matches it plays. */
-    var team by remember { mutableStateOf<io.github.projectwip.net.TeamLink?>(null) }
-    val teamUp = team?.takeIf { !it.ended && it.error == null }
-    // In a team, matches are started by its leader, from the team screen: Play goes there.
     val go: (Screen) -> Unit = {
-        val to = if (it is Screen.Match && it.config.team == null && teamUp != null) Screen.Team else it
-        if (to !is Screen.Match) sfx.play(Sound.WHOOSH, 0.7f)
-        screen = to
-    }
-    // The leader has pressed Play: everyone in the team goes into the match, from whatever screen they are on.
-    val teamStart = teamUp?.start
-    LaunchedEffect(teamStart, screen is Screen.Match) {
-        if (teamStart == null || screen is Screen.Match) return@LaunchedEffect
-        teamStart.bots?.let { server.useBots(teamStart.difficulty, it) }
-        val me = teamStart.setup.players[teamStart.setup.slot]
-        screen = Screen.Match(MatchConfig(me.fighter, me.level, me.skin, me.name, teamStart.difficulty, mode = teamStart.mode,
-            seed = teamStart.seed, boss = teamStart.boss, botNames = teamStart.botNames, team = teamStart.setup))
+        if (it !is Screen.Match) sfx.play(Sound.WHOOSH, 0.7f)
+        screen = it
     }
     val showReward: (RewardReveal) -> Unit = { reveal = it }
 
     /** A short message across the top of the screen (why a drop didn't open, say). */
     var toast by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(toast) { if (toast != null) { delay(3200); toast = null } }
-    var opening by remember { mutableStateOf(false) }
-    /** A match has just ended and the server is replaying it to decide the result. */
-    var judging by remember { mutableStateOf(false) }
-    val ask = remember { ServerCall(scope, server, repo, sfx) { toast = it } }
-    // Spark Drops are opened by the server: it rolls the drop, the game shows what came out.
+    val ask = remember { GameCall(game, sfx) { toast = it } }
+    // Cheats (luck, drops that aren't used up) only count while the debug menu is on.
     val openCapsule: () -> Unit = {
-        if (!opening) {
-            if (!serverStatus.online) toast = "Spark Drops are opened by the server, and you're offline."
-            else {
-                opening = true
-                scope.launch {
-                    val cheats = repo.save.value.settings
-                    val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        server.openDrop(if (dev) cheats.debugLuck else 0f, dev && cheats.debugInfiniteCapsules)
-                    }
-                    opening = false
-                    server.status.value.account?.let { repo.sync(it) }
-                    if (result != null) { repo.dropOpened(); capsule = result }
-                    else toast = if (server.status.value.online) "No Spark Drops to open." else "Couldn't reach the server. Try again in a moment."
-                }
-            }
-        }
+        val cheats = repo.save.value.settings
+        val result = game.openDrop(if (devMenu) cheats.debugLuck else 0f, devMenu && cheats.debugInfiniteCapsules)
+        if (result != null) capsule = result else toast = "No Spark Drops to open."
     }
     /** Everything that came out of an "open all", while it is being shown. Like [capsule], it is already saved. */
     var haul by remember {
@@ -285,20 +201,9 @@ fun App(repo: GameRepository, sfx: Sfx, music: io.github.projectwip.audio.Music,
     }
     // Opens every drop that is left. [first] is the one on screen, when its own reveal is being skipped.
     val openAll: (CapsuleResult?) -> Unit = { first ->
-        if (!opening) {
-            if (!serverStatus.online) toast = "Spark Drops are opened by the server, and you're offline."
-            else {
-                opening = true
-                scope.launch {
-                    val luck = if (dev) repo.save.value.settings.debugLuck else 0f
-                    val rest = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { server.openAllDrops(luck) }
-                    opening = false
-                    server.status.value.account?.let { repo.sync(it) }
-                    if (rest != null) { repo.dropOpened(rest.size); capsule = null; haul = listOfNotNull(first) + rest }
-                    else toast = if (server.status.value.online) "No Spark Drops to open." else "Couldn't reach the server. Try again in a moment."
-                }
-            }
-        }
+        val rest = game.openAllDrops(if (devMenu) repo.save.value.settings.debugLuck else 0f)
+        if (rest != null) { capsule = null; haul = listOfNotNull(first) + rest }
+        else toast = "No Spark Drops to open."
     }
     var debugMenu by remember { mutableStateOf(false) }
 
@@ -317,7 +222,7 @@ fun App(repo: GameRepository, sfx: Sfx, music: io.github.projectwip.audio.Music,
         val metrics = UiMetrics(maxWidth.value / scale, maxHeight.value / scale, scale)
 
         val lobby = remember { io.github.projectwip.render3d.LobbyParams() }
-        CompositionLocalProvider(LocalDensity provides density, LocalUi provides metrics, LocalSfx provides sfx, LocalLobby provides lobby, LocalServer provides server, LocalDev provides dev, LocalServerCall provides ask) {
+        CompositionLocalProvider(LocalDensity provides density, LocalUi provides metrics, LocalSfx provides sfx, LocalLobby provides lobby, LocalDev provides true, LocalPlay provides game, LocalGameCall provides ask) {
             if (screen !is Screen.Match) {
                 androidx.compose.ui.viewinterop.AndroidView(
                     factory = { ctx -> io.github.projectwip.render3d.LobbyView(ctx, lobby) },
@@ -345,40 +250,18 @@ fun App(repo: GameRepository, sfx: Sfx, music: io.github.projectwip.audio.Music,
                     Screen.Home -> HomeScreen(save, repo, go, showReward, openCapsule)
                     is Screen.Fighters -> FightersScreen(save, repo, s.focus, go)
                     Screen.CupTrack -> CupTrackScreen(save, repo, go, showReward)
-                    Screen.Leaderboard -> io.github.projectwip.ui.screens.LeaderboardScreen(save, go)
                     Screen.News -> io.github.projectwip.ui.screens.NewsScreen(go)
                     Screen.Shop -> ShopScreen(save, repo, go, showReward)
                     Screen.Road -> io.github.projectwip.ui.screens.RoadScreen(save, go, showReward)
                     Screen.Pass -> io.github.projectwip.ui.screens.PassScreen(save, go, showReward)
                     Screen.Settings -> SettingsScreen(save, repo, go)
-                    Screen.Team -> io.github.projectwip.ui.screens.TeamScreen(save, team, { team = it }, go)
                     is Screen.Match -> MatchScreen(
-                        // The difficulty is the one the server last approved (it is kept in the settings), and the
-                        // server's match plan has the final word.
-                        s.config,
-                        save.settings, sfx, save.matchesPlayed, server,
+                        s.config, save.settings, sfx, save.matchesPlayed,
                         onCancel = { screen = Screen.Home },
-                        team = team,
                         onFinish = { summary ->
-                            scope.launch {
-                                // The server replays the match from the player's inputs: the result and what it is worth are
-                                // its own. No answer means an offline match: the device's result is shown and nothing is earned.
-                                // (A 1v1 is settled by the lobby, from both players' inputs, and the answer comes down its line.)
-                                val duel = summary.duel
-                                val squad = summary.team
-                                judging = (summary.serverMatchId > 0 || duel != null || squad != null) && serverStatus.online
-                                val verdict = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                    if (duel != null) duel.result()?.let { server.duelVerdict(it) }
-                                    else if (squad != null) squad.result()?.let { server.duelVerdict(it) }
-                                    else server.reportMatch(summary.serverMatchId, summary.report, summary.inputs)
-                                }
-                                judging = false
-                                server.status.value.account?.let { repo.sync(it) }
-                                val shown = verdict?.judged?.let { summary.judged(it) } ?: summary
-                                // The Training Area is practice: nothing to record, straight back to the lobby.
-                                if (shown.report.mode == io.github.projectwip.data.GameMode.TRAINING) screen = Screen.Home
-                                else screen = Screen.Result(shown, repo.applyMatch(shown.report, verdict))
-                            }
+                            // The Training Area is practice: nothing to record, straight back to the lobby.
+                            screen = if (summary.report.mode == io.github.projectwip.data.GameMode.TRAINING) Screen.Home
+                            else Screen.Result(summary, repo.applyMatch(summary.report))
                         })
                     is Screen.Result -> ResultScreen(s.summary, s.rewards, save, go)
                 }
@@ -389,48 +272,19 @@ fun App(repo: GameRepository, sfx: Sfx, music: io.github.projectwip.audio.Music,
             }
             // The debug menu hides behind a small "D" in the corner of every menu screen.
             // Developers only, and only if they switched it on in Settings > Developer.
-            val devMenu = dev && save.settings.devMenu
             if (devMenu && screen !is Screen.Match && capsule == null && haul == null && reveal == null) {
                 // On the home screen the bottom-left corner belongs to the Spark Pass and Spark Road cards, so the
                 // button sits under the settings gear instead, in line with it.
                 io.github.projectwip.ui.screens.DebugButton(if (screen is Screen.Home) Modifier.align(Alignment.TopEnd).padding(top = 70.dp, end = 27.dp) else Modifier.align(Alignment.BottomStart)) { debugMenu = true }
             }
             if (debugMenu && devMenu) io.github.projectwip.ui.screens.DebugMenu(save, repo) { debugMenu = false }
-            // On top of everything: the loading screen, then (if a newer release exists) the update screen.
-            // Server status in the corner. (Its notice is part of the home screen.)
-            if (screen !is Screen.Match && capsule == null && haul == null && reveal == null) {
-                PlainText(
-                    if (serverStatus.online) "● ONLINE" else "● OFFLINE MODE · practice only", Type.Small,
-                    if (screen is Screen.Home) Modifier.align(Alignment.TopStart).padding(start = 22.dp, top = 68.dp)
-                    else Modifier.align(Alignment.BottomStart).padding(start = if (devMenu) 48.dp else 14.dp, bottom = 12.dp),
-                    color = if (serverStatus.online) Palette.Positive else Palette.TextDim,
-                )
-            }
-            if (!booting) update?.let { io.github.projectwip.ui.screens.UpdateScreen(it) { update = null } }
-            if (!booting && update == null && !serverStatus.supported && !unsupportedSkipped) {
-                io.github.projectwip.ui.screens.UnsupportedScreen(serverStatus.message, REPO_RELEASES) { unsupportedSkipped = true }
-            }
-            if (!booting && update == null && disabledShown && !inMatch) {
-                if (serverStatus.disabled) io.github.projectwip.ui.screens.DisabledScreen(serverStatus.disabledReason, serverStatus.disabledUntil)
-                else io.github.projectwip.ui.screens.DisabledScreen("An example reason, as the server's owner wrote it.", System.currentTimeMillis() + 54 * 3600_000L)
-            }
-            if (judging) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)), contentAlignment = Alignment.Center) {
-                GameText("THE SERVER IS CHECKING THE MATCH…", Type.Title, outline = 3.5.dp)
-            }
             toast?.let { Badge(it, Modifier.align(Alignment.TopCenter).padding(top = 120.dp), color = Palette.RedDeep) }
             AnimatedVisibility(booting, enter = fadeIn(tween(0)), exit = fadeOut(tween(250))) {
-                // Dev builds don't have to sit through the minute of trying.
-                io.github.projectwip.ui.screens.LoadingScreen(bootProgress, bootStatus,
-                    onSkip = if (io.github.projectwip.BuildConfig.DEBUG && connection == Connection.CONNECTING) ({ connection = Connection.SETTLED }) else null)
+                io.github.projectwip.ui.screens.LoadingScreen(bootProgress, bootStatus)
             }
             if (needsName) io.github.projectwip.ui.screens.NameScreen { name ->
                 repo.updateSettings { it.copy(playerName = name, nameChosen = true) }
                 needsName = false
-            }
-            if (booting && connection == Connection.FAILED) {
-                io.github.projectwip.ui.screens.ConnectFailedScreen(
-                    serverStatus.url, onRetry = { connectAttempt++ }, onOffline = { connection = Connection.SETTLED },
-                )
             }
             AnimatedVisibility(capsule != null, enter = fadeIn(tween(150)), exit = fadeOut(tween(150))) {
                 capsule?.let { CapsuleOpenOverlay(it, if (save.settings.debugInfiniteCapsules) Int.MAX_VALUE else save.capsules, save.bolts, save.prisms, roadNow(save), roadGoal(save), onNext = openCapsule, onOpenAll = openAll, onDone = { capsule = null }) }
@@ -452,33 +306,6 @@ private fun previewResult(save: io.github.projectwip.data.SaveData): Screen {
         io.github.projectwip.ui.screens.PlayerLine(if (i == 1) save.settings.playerName else "Bot $i", FighterId.entries[i % 3], 0, i, 10 - i, 1, 6000 - i * 500, i == 1, i == 1, i != 1, placement = i)
     }
     return Screen.Result(MatchSummary(report, players, 1), MatchRewards(save.cups, 8, 32, 10, emptyList(), capsuleEarned = true, capsulesLeftToday = 2))
-}
-
-private const val REPO_RELEASES = "https://github.com/TerminalDev-1/AstroArena/releases"
-
-/** How long the loading screen keeps trying to reach the server before offering offline mode. */
-private const val CONNECT_PATIENCE_MS = 60_000L
-
-/** CONNECTING: trying to reach the server. FAILED: a minute went by, the player decides. SETTLED: online, or offline by choice. */
-private enum class Connection { CONNECTING, FAILED, SETTLED }
-
-/**
- * Says hello to the game server and syncs the save with it. Blocking: call it off the main thread.
- * A save nobody has played on is replaced by the copy the server holds; otherwise this device's save wins
- * and is uploaded. Either way the server then says who this player is (its Cups, its Spark Drops, developer
- * or not), which the game takes on.
- */
-fun connectToServer(server: io.github.projectwip.net.GameServer, repo: GameRepository) {
-    val save = repo.save.value
-    val url = save.settings.serverUrl.ifBlank { io.github.projectwip.BuildConfig.SERVER_URL }
-    val stored = server.connect(url, io.github.projectwip.BuildConfig.VERSION_CODE.toString(), save.settings.playerName)
-    val status = server.status.value
-    if (!status.online || !status.supported) return
-    val restored = stored?.let { runCatching { io.github.projectwip.data.SaveStore.fromJson(it) }.getOrNull() }
-    if (restored != null && io.github.projectwip.data.Progression.isFresh(save) && !io.github.projectwip.data.Progression.isFresh(restored)) {
-        repo.restore(restored)
-        server.refreshAccount()
-    } else server.syncSave(io.github.projectwip.data.SaveStore.toJson(repo.save.value))
 }
 
 fun startMatchConfig(save: io.github.projectwip.data.SaveData): MatchConfig {

@@ -68,7 +68,7 @@ import io.github.projectwip.audio.Sound
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.collectAsState
 
-const val REPO_URL = "https://github.com/TerminalDev-1/AstroArena"
+const val REPO_URL = "https://github.com/TerminalDev-1/Astro-Arena-ClientOnly"
 
 private enum class Tab(val label: String) { GAMEPLAY("Gameplay"), CONTROLS("Controls"), AUDIO("Audio & Feel"), DISPLAY("Display"), DATA("Data"), DEVELOPER("Developer") }
 
@@ -103,7 +103,7 @@ fun SettingsScreen(save: SaveData, repo: GameRepository, go: (Screen) -> Unit) {
                             Tab.CONTROLS -> ControlsTab(s, set) { editingLayout = true }
                             Tab.AUDIO -> AudioTab(s, set)
                             Tab.DISPLAY -> DisplayTab(s, set)
-                            Tab.DATA -> DataTab(repo, dev)
+                            Tab.DATA -> DataTab(repo)
                             Tab.DEVELOPER -> if (dev) DeveloperTab(s, set)
                         }
                     }
@@ -116,14 +116,12 @@ fun SettingsScreen(save: SaveData, repo: GameRepository, go: (Screen) -> Unit) {
 
 @Composable
 private fun GameplayTab(s: Settings, set: ((Settings) -> Settings) -> Unit) {
-    // The server has to approve the choice: tapping one asks it, and what it approves is what shows as selected.
-    val ask = io.github.projectwip.ui.LocalServerCall.current
-    SectionTitle("BOT DIFFICULTY", "Changes how bots think — reaction time, aim, dodging, positioning, target choice and super timing. Never their health or damage. The server confirms your choice.")
+    SectionTitle("BOT DIFFICULTY", "Changes how bots think — reaction time, aim, dodging, positioning, target choice and super timing. Never their health or damage.")
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         for (d in BotDifficulty.entries) {
             val selected = d == s.botDifficulty
             Box(Modifier.weight(1f)) {
-                ChunkyButton({ ask({ setDifficulty(d) }) }, Modifier.fillMaxWidth().height(150.dp),
+                ChunkyButton({ set { it.copy(botDifficulty = d) } }, Modifier.fillMaxWidth().height(150.dp),
                     if (selected) ButtonStyle.ORANGE else ButtonStyle.PURPLE, cut = 14.dp, sound = Sound.UI_SELECT) {
                     Column(Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         GameText(d.label.uppercase(), Type.Heading, color = if (selected) Color.White else difficultyColor(d), outline = 2.5.dp)
@@ -138,35 +136,6 @@ private fun GameplayTab(s: Settings, set: ((Settings) -> Settings) -> Unit) {
     }
     SectionTitle("PLAYER NAME", "Shown above your fighter in matches.")
     NameField(s.playerName) { n -> set { it.copy(playerName = n, nameChosen = true) } }
-}
-
-/** Where the game server lives. Empty means "use the address this build was made with" (shown as the hint). */
-@Composable
-private fun ServerField(value: String, hint: String, onChange: (String) -> Unit) {
-    var text by remember(value) { mutableStateOf(value) }
-    Box(
-        Modifier.width(430.dp).height(52.dp).drawBehind {
-            val o = plateShape(10.dp, 4.dp).createOutline(size, layoutDirection, this)
-            val p = androidx.compose.ui.graphics.Path().apply { addOutline(o) }
-            drawPath(p, Palette.PanelInset)
-            drawPath(p, Palette.Ink, style = Stroke(2.5.dp.toPx()))
-        }.padding(horizontal = 14.dp),
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        if (text.isEmpty()) PlainText(hint, Type.Label, color = Palette.TextDim.copy(alpha = 0.6f), maxLines = 1)
-        BasicTextField(
-            text,
-            onValueChange = { v ->
-                val clean = v.filter { it.isLetterOrDigit() || it in ":/.-_" }.take(120)
-                text = clean
-                onChange(clean.trim())
-            },
-            singleLine = true,
-            textStyle = Type.Label,
-            cursorBrush = SolidColor(Palette.Gold),
-            modifier = Modifier.fillMaxWidth(),
-        )
-    }
 }
 
 @Composable
@@ -238,38 +207,10 @@ private fun DisplayTab(s: Settings, set: ((Settings) -> Settings) -> Unit) {
 }
 
 @Composable
-private fun DataTab(repo: GameRepository, dev: Boolean) {
+private fun DataTab(repo: GameRepository) {
     var confirm by remember { mutableStateOf(false) }
-    val ask = io.github.projectwip.ui.LocalServerCall.current
-    // Starting an account over is for developers; the server refuses anyone else.
-    if (dev) {
-    SectionTitle("RESET PROGRESS", "Erase Cups, levels, currencies and claimed rewards on the server. Your name and settings are kept. This cannot be undone.")
+    SectionTitle("RESET PROGRESS", "Erase Cups, levels, currencies and claimed rewards. Your name and settings are kept. This cannot be undone.")
     ChunkyButton({ confirm = true }, Modifier.width(260.dp).height(56.dp), ButtonStyle.RED) { GameText("RESET PROGRESS", Type.Heading) }
-    Spacer(Modifier.height(10.dp))
-    }
-    // ---- game server
-    val server = io.github.projectwip.ui.LocalServer.current
-    val status = server?.status?.collectAsState()?.value
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
-    val address = repo.save.collectAsState().value.settings.serverUrl
-    SectionTitle("SERVER", when {
-        status == null -> "No server connection in this build."
-        !status.supported -> "The server at ${status.url} doesn't support this version."
-        status.disabled -> "Your account on ${status.url} has been disabled by the server's owner."
-        status.online -> "Online: connected to ${status.url}. The server keeps your Cups, Spark Drops, Power Ups, Crystals and fighters, sets matches up and decides their results."
-        else -> "Offline mode: couldn't reach ${status.url.ifBlank { BuildConfig.SERVER_URL }}. You can still play against bots for practice; nothing is earned or spent until you're back online."
-    })
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        ServerField(address, BuildConfig.SERVER_URL) { url -> repo.updateSettings { it.copy(serverUrl = url) } }
-        ChunkyButton({
-            if (server != null) scope.launch(kotlinx.coroutines.Dispatchers.IO) { io.github.projectwip.ui.connectToServer(server, repo) }
-        }, Modifier.width(230.dp).height(52.dp), ButtonStyle.CYAN, lip = 4.dp) { GameText("RECONNECT", Type.Heading) }
-    }
-    server?.playerId?.let { id ->
-        PlainText("Player ID: $id" + if (status?.account?.developer == true) "  ·  developer" else "", Type.Body, color = Color.White)
-    }
-    PlainText("Leave the address empty to use the built-in one. Start the server on your computer with server/run.bat; it prints the address to type here.",
-        Type.Small, color = Palette.TextDim.copy(alpha = 0.8f))
     Spacer(Modifier.height(10.dp))
     SectionTitle("ABOUT", "AstroArena ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE}). Preview software: everything may change without notice. All characters, art, sounds and rules are original.")
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -278,20 +219,17 @@ private fun DataTab(repo: GameRepository, dev: Boolean) {
     }, Modifier.width(380.dp).height(56.dp), ButtonStyle.CYAN) { GameText("SOURCE ON GITHUB", Type.Heading) }
     PlainText(REPO_URL, Type.Small, color = Palette.Cyan)
     if (confirm) {
-        ConfirmDialog("RESET EVERYTHING?", "All progress will be lost.", "RESET", { confirm = false; ask({ reset() }) { repo.resetProgress() } }, { confirm = false }, ButtonStyle.RED)
+        ConfirmDialog("RESET EVERYTHING?", "All progress will be lost.", "RESET", { confirm = false; repo.resetProgress() }, { confirm = false }, ButtonStyle.RED)
     }
 }
 
 /** Developers only: whether the "D" button (the debug menu) is on the menu screens. It is off until switched on here. */
 @Composable
 private fun DeveloperTab(s: Settings, set: ((Settings) -> Settings) -> Unit) {
-    val server = io.github.projectwip.ui.LocalServer.current
-    val listed = server?.status?.collectAsState()?.value?.account?.developer == true
-    SectionTitle("DEVELOPER", if (listed) "The server lists you as a developer." else "The server no longer lists you as a developer.")
+    SectionTitle("DEVELOPER", "Tools for testing the game.")
     ToggleRow("DEVELOPER MENU", "Shows a small D button in the corner of the menu screens. It opens the debug menu: drop luck, upgrade cost, hand-outs.", s.devMenu) { v ->
         set { it.copy(devMenu = v) }
     }
-    server?.playerId?.let { PlainText("Player ID: $it", Type.Body, color = Color.White) }
 }
 
 // ---------------------------------------------------------------------------------------------- controls

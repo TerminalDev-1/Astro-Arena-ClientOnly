@@ -171,7 +171,6 @@ fun ResultScreen(summary: MatchSummary, rewards: MatchRewards, save: SaveData, g
                                 io.github.projectwip.data.GameMode.KNOCKOUT_RUSH -> "Knockout Rush · Foundry Yard · ${r.difficulty.label} bots"
                                 io.github.projectwip.data.GameMode.BOSS -> "Boss Mode · Proving Ground · ${r.difficulty.label} boss"
                                 io.github.projectwip.data.GameMode.TRAINING -> "Training Area"
-                                io.github.projectwip.data.GameMode.DUEL -> "1v1 · Proving Ground"
                             }, Type.Label, color = Palette.TextDim)
                     }
                 }
@@ -256,10 +255,7 @@ fun ResultScreen(summary: MatchSummary, rewards: MatchRewards, save: SaveData, g
                             if (rewards.capsuleEarned && row++ < rowsShown) RewardChip(IconKind.CAPSULE, "+1")
                         }
                         if (rewards.mvpCups > 0) PlainText("MVP: +${rewards.mvpCups} Cups", Type.Small, color = Palette.Gold)
-                        val dropsHere = r.mode != io.github.projectwip.data.GameMode.BOSS && r.mode != io.github.projectwip.data.GameMode.DUEL && rewards.online
-                        // Everything a match is worth is awarded by the server; without it a match is practice.
-                        if (r.mode == io.github.projectwip.data.GameMode.DUEL && !rewards.online) PlainText("This 1v1 wasn't settled by the server · nothing is earned", Type.Small, color = Palette.Gold)
-                        else if (!rewards.online) PlainText("Offline match · rewards are only earned online", Type.Small, color = Palette.Gold)
+                        val dropsHere = r.mode != io.github.projectwip.data.GameMode.BOSS
                         if (dropsHere && !rewards.capsuleEarned && rewards.capsulesLeftToday <= 0) {
                             PlainText("All of today's Spark Drops are earned · more tomorrow", Type.Small, color = Palette.Text)
                         }

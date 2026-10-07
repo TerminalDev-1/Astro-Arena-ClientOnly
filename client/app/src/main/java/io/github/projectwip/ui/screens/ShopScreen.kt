@@ -74,13 +74,13 @@ fun ShopScreen(save: SaveData, repo: GameRepository, go: (Screen) -> Unit, showR
     // so the width follows the height instead of being one fixed number that looks squashed on a tablet.
     val cardW = ((ui.heightDp - 120f) * 0.62f).coerceIn(176f, 300f).dp
     val dev = io.github.projectwip.ui.LocalDev.current
-    val ask = io.github.projectwip.ui.LocalServerCall.current
-    // Today's offers and the clock they run on come from the server; offline there are none to show.
-    val status = io.github.projectwip.ui.LocalServer.current?.status?.collectAsState()?.value
-    val account = status?.account?.takeIf { status.online }
-    val untilRefresh = account?.let { secondsUntil(it.dayEndsAt) }
-    // The server's day has ended: ask it for the new one (new offers, a new gift).
-    LaunchedEffect(untilRefresh == 0L) { if (untilRefresh == 0L) ask({ refreshAccount().takeIf { it } }) }
+    val ask = io.github.projectwip.ui.LocalGameCall.current
+    // Today's offers and the clock they run on. When the day ends the shop is asked for the new one (new offers, a new gift).
+    val game = io.github.projectwip.ui.LocalPlay.current
+    var dayTick by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val account = remember(save, dayTick) { game.account(save) }
+    val untilRefresh = secondsUntil(account.dayEndsAt)
+    LaunchedEffect(untilRefresh == 0L) { if (untilRefresh == 0L) dayTick++ }
 
     Box(Modifier.fillMaxSize()) {
         io.github.projectwip.ui.LobbyShotEffect(io.github.projectwip.render3d.LobbyShot.BACKDROP)
@@ -92,18 +92,18 @@ fun ShopScreen(save: SaveData, repo: GameRepository, go: (Screen) -> Unit, showR
                 contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 18.dp, top = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                item { Section("DAILY GIFT") { DailyGiftCard(save, repo, cardW * 1.15f, account?.giftAvailable, untilRefresh, showReward) } }
-                if (account != null && untilRefresh != null && account.dailyOffers.isNotEmpty()) item {
+                item { Section("DAILY GIFT") { DailyGiftCard(save, repo, cardW * 1.15f, account.giftAvailable, untilRefresh, showReward) } }
+                if (account.dailyOffers.isNotEmpty()) item {
                     Section("DAILY OFFERS") {
                         RefreshCard(cardW * 0.8f, untilRefresh)
                         account.dailyOffers.forEach { o ->
                             // The clock card says when these end, so the cards themselves don't repeat it.
                             CustomOfferCard(o.copy(expiresAt = 0), cardW, canDelete = false,
-                                onBuy = { ask({ buyDaily(o.id, account.day) }) { showReward(RewardReveal(o.title, it)) } }, onDelete = {})
+                                onBuy = { ask({ buyDaily(o.id.toInt()) }) { showReward(RewardReveal(o.title, it)) } }, onDelete = {})
                         }
                     }
                 }
-                // Deals come from the server: developers make them, and every player sees them.
+                // Deals are made with the Offer Creator (Settings > Developer).
                 val now = System.currentTimeMillis()
                 val deals = save.customOffers.filter { !it.expired(now) }
                 if (dev || deals.isNotEmpty()) item {
@@ -185,7 +185,7 @@ fun ShopScreen(save: SaveData, repo: GameRepository, go: (Screen) -> Unit, showR
     }
 }
 
-/** Seconds until [atMs] (on this device's clock), ticking once a second. The server says when; the device only counts. */
+/** Seconds until [atMs] (on this device's clock), ticking once a second. The device only counts. */
 @Composable
 private fun secondsUntil(atMs: Long): Long {
     val left by produceState(((atMs - System.currentTimeMillis()) / 1000).coerceAtLeast(0), atMs) {
@@ -199,7 +199,7 @@ private fun secondsUntil(atMs: Long): Long {
 
 private fun clockText(seconds: Long) = "%02d:%02d:%02d".format(seconds / 3600, (seconds / 60) % 60, seconds % 60)
 
-/** The first card of the daily offers: a ticking clock and how long until the server changes the shop. */
+/** The first card of the daily offers: a ticking clock and how long until the shop changes. */
 @Composable
 private fun RefreshCard(width: androidx.compose.ui.unit.Dp, seconds: Long) {
     Panel(Modifier.width(width).fillMaxHeight().padding(top = 8.dp), color = Color(0xFF244B8F), colorBottom = Color(0xFF14245A), cut = 16.dp) {
@@ -339,13 +339,11 @@ private fun BoltPile(size: Int) {
 @Composable
 private fun DailyGiftCard(
     save: SaveData, repo: GameRepository, width: androidx.compose.ui.unit.Dp,
-    /** Whether the server says today's gift is still there (null when offline: the last known day is used). */
-    serverSaysAvailable: Boolean?, untilRefresh: Long?, showReward: (RewardReveal) -> Unit,
+    available: Boolean, untilRefresh: Long, showReward: (RewardReveal) -> Unit,
 ) {
-    val available = serverSaysAvailable ?: Progression.dailyGiftAvailable(save, repo.today)
-    val ask = io.github.projectwip.ui.LocalServerCall.current
+    val ask = io.github.projectwip.ui.LocalGameCall.current
     val reward = Shop.dailyGift(repo.today)
-    val countdown = untilRefresh?.let { clockText(it) } ?: "--:--:--"
+    val countdown = clockText(untilRefresh)
     Box(Modifier.width(width).fillMaxHeight()) {
         Panel(Modifier.fillMaxSize().padding(top = 8.dp), color = Color(0xFF7A2BB8), colorBottom = Color(0xFF3A1470), cut = 16.dp) {
             Column(Modifier.fillMaxSize().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {

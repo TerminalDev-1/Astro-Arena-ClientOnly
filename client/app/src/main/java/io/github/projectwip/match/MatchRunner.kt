@@ -36,27 +36,7 @@ class MatchRunner(
     val controls: TouchControls,
     private val onPause: () -> Unit,
     private val onFinished: (MatchReport) -> Unit,
-    /** In a 1v1 against a real player: the line to them. Ticks only run once both players' inputs are in. */
-    private val duel: io.github.projectwip.net.DuelLink? = null,
-    /** In a team of real players: the line to them. Ticks only run once everyone's inputs are in. */
-    private val team: io.github.projectwip.net.TeamLink? = null,
 ) {
-    /** The match is shared with a team (the HUD words its notices for that). */
-    val teamMatch: Boolean get() = team != null
-    private val humans = match.humans
-    /** The next tick the simulation will run (1v1 only). */
-    private var simTick = 0
-    /** Seconds spent waiting for the other player's inputs. */
-    private var stalled = 0f
-    /** True while a 1v1 is held up waiting for the other player: the HUD says so. */
-    @Volatile var waitingForOpponent = false
-        private set
-    /** True once a 1v1 has been called off because the two devices no longer agreed about it. */
-    @Volatile var outOfStep = false
-        private set
-    /** True once a 1v1 has been called off because the connection went. */
-    @Volatile var connectionLost = false
-        private set
     val input = TouchControls.Input()
     /** Events produced during the last [update] — consumed by the renderer for effects. */
     val frameEvents = ArrayList<GameEvent>()
@@ -109,73 +89,6 @@ class MatchRunner(
             c.superAttack = true
         }
         if (input.hyper && p.hyperReady) c.hyper = true
-
-        val link = duel
-        val them = match.opponent
-        if (link != null && them != null && !match.isOver) {
-            if (link.outOfStep) {
-                // The two devices have computed the match differently. Neither can be trusted: it is called off.
-                outOfStep = true
-                match.world.abandon()
-            } else if (link.remoteLeft) {
-                // The lobby says the other player has gone: the match is this player's.
-                match.world.forfeit(them.team)
-            } else if (link.dropped) {
-                // The lobby says it was this player who stopped responding: the match is the other's.
-                match.world.forfeit(p.team)
-            } else if (link.lost) {
-                // The line went and nobody can say whose doing it was: called off.
-                connectionLost = true
-                match.world.abandon()
-            } else {
-                // What the player wants now is recorded, to be played a few ticks from now on both devices...
-                if (link.sent <= simTick) link.sendLocal(c)
-                // ...and this tick only runs if both players' inputs for it have arrived.
-                if (!link.ready(simTick)) {
-                    c.attack = false; c.superAttack = false; c.hyper = false
-                    // Held up. What that means is the lobby's call (it can see both players); this device only gives
-                    // up by itself if the lobby has gone quiet too.
-                    stalled += Match.STEP
-                    waitingForOpponent = stalled > 0.4f
-                    if (stalled > 60f) link.close()
-                    return
-                }
-                stalled = 0f
-                waitingForOpponent = false
-                // Twice a second the devices compare what they make of the match so far (before this tick runs).
-                if (simTick % io.github.projectwip.net.DuelLink.CHECK_EVERY == 0) link.check(simTick, match.world.checksum())
-                link.apply(simTick, c, them.control)
-                simTick++
-            }
-        }
-
-        val squad = team
-        if (squad != null && !match.isOver) {
-            if (squad.dropped) {
-                // The lobby says this player stopped responding: they are out, and it counts as their defeat.
-                match.world.forfeit(p.team)
-            } else if (squad.calledOff) {
-                // The devices disagreed about the match, or the line went: it can't go on.
-                connectionLost = true
-                match.world.abandon()
-            } else {
-                if (squad.sent <= simTick) squad.sendLocal(c)
-                if (!squad.ready(simTick)) {
-                    c.attack = false; c.superAttack = false; c.hyper = false
-                    // Held up by someone's inputs. The lobby drops whoever has stopped; this device only gives up
-                    // by itself if the lobby has gone quiet too.
-                    stalled += Match.STEP
-                    waitingForOpponent = stalled > 0.4f
-                    if (stalled > 60f) squad.close()
-                    return
-                }
-                stalled = 0f
-                waitingForOpponent = false
-                if (simTick % io.github.projectwip.net.DuelLink.CHECK_EVERY == 0) squad.check(simTick, match.world.checksum())
-                squad.apply(simTick, humans.map { it.control })
-                simTick++
-            }
-        }
 
         val ammoBefore = p.ammo
         val tried = c.attack

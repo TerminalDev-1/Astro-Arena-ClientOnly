@@ -22,4 +22,3 @@ dependencyResolutionManagement {
 
 rootProject.name = "AstroArena"
 include(":app")
-include(":referee")

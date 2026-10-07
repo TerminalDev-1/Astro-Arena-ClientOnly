@@ -303,7 +303,7 @@ object Arenas {
         fun open(x: Float, y: Float, r: Float) = base.nearestOpen(x, y, r)
         // Room for the biggest boss (2.5 x the widest fighter).
         val bossSpot = open(w * 0.5f, h * 0.16f, 1.3f)
-        // (The second and third spots are for a team; alone, or in a 1v1, a fighter starts on the first.)
+        // (A fighter starts on the first spot.)
         val starts = listOf(open(w * 0.5f, h - 1.5f, 0.5f), open(w * 0.5f - 1.8f, h - 1.5f, 0.5f), open(w * 0.5f + 1.8f, h - 1.5f, 0.5f))
         return base.withSpawns(listOf(starts, listOf(bossSpot)))
     }

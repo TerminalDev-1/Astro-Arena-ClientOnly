@@ -37,7 +37,6 @@ data class MatchRules(
         /** The player wins by knocking out the boss, and has unlimited lives to do it. */
         fun bossMode() = MatchRules(koTarget = 1, enemyKoTarget = Int.MAX_VALUE, durationSeconds = Float.MAX_VALUE, boss = true)
         /** One against one: first to three knockouts, or whoever is ahead after two minutes. */
-        fun duel() = MatchRules(koTarget = 3, durationSeconds = 120f)
         fun training() = MatchRules(koTarget = Int.MAX_VALUE, enemyKoTarget = Int.MAX_VALUE, durationSeconds = Float.MAX_VALUE, practice = true)
     }
 }
@@ -68,7 +67,7 @@ class Storm(val cx: Float, val cy: Float, val startRadius: Float) {
 
 /**
  * The authoritative simulation. Advanced in fixed steps by [step]; has no Android dependencies so
- * it can run in unit tests, headless bot-vs-bot balance runs, or a future server.
+ * it can run in unit tests and headless bot-vs-bot balance runs.
  */
 class World(
     val arena: Arena,
@@ -166,32 +165,6 @@ class World(
             timeLeft = 0f
             end(if (score[0] > score[1]) 0 else if (score[1] > score[0]) 1 else -1)
         }
-    }
-
-    /** [team] gives up (in a 1v1: its player left): the other team wins on the spot. */
-    fun forfeit(team: Int) {
-        if (phase != Phase.ENDED) end(1 - team)
-    }
-
-    /** The match is called off with no winner (a 1v1 whose two devices no longer agree). */
-    fun abandon() {
-        if (phase != Phase.ENDED) end(-1)
-    }
-
-    /**
-     * A number that sums up where the match stands. Two devices running the same match get the same number on
-     * the same tick, and almost certainly a different one the moment they disagree about anything.
-     */
-    fun checksum(): Int {
-        var h = 17
-        fun mix(v: Int) { h = h * 31 + v }
-        for (f in fighters) {
-            mix(f.x.toRawBits()); mix(f.y.toRawBits()); mix(f.hp); mix(f.shieldHp); mix(f.kos)
-            mix(f.superCharge.toRawBits()); mix(f.hyperCharge.toRawBits()); mix(f.ammo.toRawBits())
-        }
-        for (p in projectiles) { mix(p.x.toRawBits()); mix(p.y.toRawBits()) }
-        mix(projectiles.size); mix(hazards.size); mix(score[0]); mix(score[1]); mix(phase.ordinal)
-        return h
     }
 
     private fun end(winner: Int) {

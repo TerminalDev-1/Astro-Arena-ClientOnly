@@ -59,6 +59,11 @@ class SaveStore(context: Context) {
             put("capsulesOpened", s.capsulesOpened)
             put("boostedCapsules", s.boostedCapsules)
             put("capsuleSeed", s.capsuleSeed)
+            put("passSeason", s.passSeason)
+            put("passPoints", s.passPoints)
+            put("passClaimed", JSONArray(s.passClaimed.sorted()))
+            put("dailyDay", s.dailyDay)
+            put("dailyBought", JSONArray(s.dailyBought.sorted()))
             put("fighters", JSONObject().apply {
                 s.fighters.forEach { (id, p) ->
                     put(id.name, JSONObject().apply {
@@ -96,7 +101,6 @@ class SaveStore(context: Context) {
                 put("showFps", st.showFps)
                 put("playerName", st.playerName)
                 put("nameChosen", st.nameChosen)
-                put("serverUrl", st.serverUrl)
                 put("attackStickMode", st.attackStickMode.name)
                 put("debugLuck", st.debugLuck.toDouble())
                 put("debugInfiniteCapsules", st.debugInfiniteCapsules)
@@ -140,7 +144,6 @@ class SaveStore(context: Context) {
                 showFps = so.optBoolean("showFps", sd.showFps),
                 playerName = so.optString("playerName", sd.playerName).take(16).ifBlank { sd.playerName },
                 nameChosen = so.optBoolean("nameChosen", false),
-                serverUrl = so.optString("serverUrl", "").take(120),
                 attackStickMode = enumOr(so.optString("attackStickMode"), sd.attackStickMode),
                 debugLuck = so.optDouble("debugLuck", 0.0).toFloat().let { if (it.isNaN()) 0f else it.coerceIn(0f, SparkCapsules.MAX_LUCK) },
                 debugInfiniteCapsules = so.optBoolean("debugInfiniteCapsules", false),
@@ -177,6 +180,11 @@ class SaveStore(context: Context) {
                 capsulesOpened = o.optInt("capsulesOpened", 0).coerceAtLeast(0),
                 boostedCapsules = o.optInt("boostedCapsules", 0).coerceAtLeast(0),
                 capsuleSeed = if (o.has("capsuleSeed")) o.optLong("capsuleSeed") else System.nanoTime(),
+                passSeason = o.optLong("passSeason", -1),
+                passPoints = o.optInt("passPoints", 0).coerceAtLeast(0),
+                passClaimed = o.optJSONArray("passClaimed")?.ints()?.toSet() ?: emptySet(),
+                dailyDay = o.optLong("dailyDay", -1),
+                dailyBought = o.optJSONArray("dailyBought")?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() } ?: emptySet(),
                 settings = settings,
                 customOffers = o.optJSONArray("customOffers")?.let { arr ->
                     (0 until arr.length()).mapNotNull { i ->

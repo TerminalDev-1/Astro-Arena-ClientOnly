@@ -18,8 +18,8 @@ enum class Currency { FREE, BOLTS, PRISMS }
 
 /**
  * A shop deal. Developers make them in-game with the Offer Creator (contents, price, an optional "was" price
- * shown as a discount, expiry, purchase limit and colour theme); the server keeps them and shows them to every
- * player, each with their own [purchased] count.
+ * shown as a discount, expiry, purchase limit and colour theme) and are kept in the save, each with its own
+ * [purchased] count.
  */
 data class CustomOffer(
     val id: Long,
@@ -75,8 +75,8 @@ data class CapsuleResult(
 
 /**
  * Spark Capsules ("Spark Drops" to players): earned from your first few good finishes each day, opened from the
- * home screen. The game server decides all of it: whether a match earned one, and what comes out when one is
- * opened (`server/astro/rules.py`). What is left here is only what the game needs to show them.
+ * home screen. [Economy] decides whether a match earned one, and what comes out when one is opened. What is
+ * left here is only what the game needs to show them.
  */
 object SparkCapsules {
     /** Capsules that can be earned per calendar day. */
@@ -113,7 +113,7 @@ data class RoadStep(val fighter: FighterId, val cost: Int)
 /**
  * The Spark Road. Credits are not kept in a wallet: whatever is earned goes straight into the road, toward the
  * next fighter along it. The order is fixed, the cheapest rarity first. When that fighter's cost is covered it
- * is theirs to claim. The server does all of it (`server/astro/economy.py`); this copy is for showing the road.
+ * is theirs to claim ([Economy.roadUnlock]).
  */
 object SparkRoad {
     /** Every fighter on the road, in the order they are unlocked. */
@@ -126,7 +126,7 @@ object SparkRoad {
 /**
  * A fighter's own rank, climbed with the Cups won while playing that fighter. Rank 1 starts at the first number,
  * rank 2 at the second, and so on. There is no top rank: past the end of the list every further rank is another
- * [STEP] Cups. The server's table (`rules.py`) is the one that counts.
+ * [STEP] Cups.
  */
 object FighterRanks {
     val starts = intArrayOf(0, 10, 20, 35, 50, 75, 100, 140, 180, 230, 280, 340, 400, 470, 540, 620, 700, 790, 880, 1000)
@@ -164,7 +164,7 @@ object Glory {
     }
 }
 
-/** This season's Spark Pass as the server holds it: points earned by playing, and a reward to claim at every tier. */
+/** This season's Spark Pass: points earned by playing, and a reward to claim at every tier. */
 data class PassState(
     val season: Long,
     /** When the season ends, on this device's clock (ms). */

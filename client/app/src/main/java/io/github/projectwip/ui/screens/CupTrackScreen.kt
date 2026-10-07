@@ -60,7 +60,7 @@ import io.github.projectwip.ui.rewardLabel
 
 @Composable
 fun CupTrackScreen(save: SaveData, @Suppress("UNUSED_PARAMETER") repo: GameRepository, go: (Screen) -> Unit, showReward: (RewardReveal) -> Unit) {
-    val ask = io.github.projectwip.ui.LocalServerCall.current
+    val ask = io.github.projectwip.ui.LocalGameCall.current
     val ui = LocalUi.current
     val nodes = listOf<Milestone?>(null) + CupTrack.milestones // null = START
     val claimable = Progression.claimable(save)

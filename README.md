@@ -3,9 +3,14 @@
 A mobile-first, landscape, **3D arena brawler for Android phones and tablets** — quick 3v3 matches,
 twin-stick touch controls, fighters you level up, Cups, a Cup Track, a Shop — and **bots as a first-class
 way to play**. Launch it, pick a fighter, press PLAY, and you're in a match against bots in seconds. No
-account and no matchmaking, and the optional game server is not needed to play.
+account, no matchmaking and no connection: **the whole game runs on your device**, with nothing to host.
 
-**Repository:** https://github.com/TerminalDev-1/AstroArena
+**Repository:** https://github.com/TerminalDev-1/Astro-Arena-ClientOnly
+
+This is the client-only edition of AstroArena: the game server is gone and everything it used to decide (what a
+match is worth, what comes out of a drop, what things cost, the shop, the Spark Pass) is done on the device by
+[`data/Economy.kt`](client/app/src/main/java/io/github/projectwip/data/Economy.kt). There is no online play: the 1v1
+and team modes, the leaderboard and the update check needed a server or the network, and were removed.
 
 > **Preview software.** This is an experiment. Anything — rules, balance, saves, code — may change without
 > notice. There is no promise of maintenance.
@@ -17,7 +22,7 @@ Cup emblem, sounds (synthesised at runtime), UI and rules. No third-party game a
 
 | | |
 |---|---|
-| **Modes** | **Last Spark** — 10-fighter free-for-all, last one standing; break Spark Crates for stacking Power Cells (+10% health & damage each) while the Static Storm closes in. **Knockout Rush** — 3v3, first team to 10 KOs, your team starts at the bottom. **Boss Mode** — you against a giant version of a random fighter; knock it out to win, with unlimited lives. The boss's strength is fixed and it pays Bolts only. **Training Area** — a practice ground with four dummies, a swarm of twelve minis, a sentry gun and a boss, none of which move; nothing at stake |
+| **Modes** | **Last Spark** — 10-fighter free-for-all, last one standing; break Spark Crates for stacking Power Cells (+10% health & damage each) while the Static Storm closes in. **Knockout Rush** — 3v3, first team to 10 KOs, your team starts at the bottom. **Boss Mode** — you against one of three bosses with moves of their own; knock it out to win, with unlimited lives. The boss's strength is fixed. **Training Area** — a practice ground with four dummies, a swarm of twelve minis, a sentry gun and a boss, none of which move; nothing at stake |
 | **Arenas** | *Static Canyon* (44×44, free-for-all) and *Foundry Yard* (vertical 3v3): walls, tall-grass thickets (hide inside), coolant pools (block movement, not shots), destructible crates |
 | **Fighters** | **Byte** (scatter rifle, knockback super, starter) · **Brakk** (shotgun tank, ram super) · **Mira** (sniper, piercing super) · **Kito** (fast blade assassin, dash super) · **Varun** (rocket firefighter: three rockets a shot, a super of eight seekers that fly over walls, hunt enemies and never land the knockout). Every fighter also has a **Hyper**: 8 seconds of +25% damage, health and shield |
 | **Graphics** | Custom OpenGL ES 3.0: toon lighting, real-time shadows, inked outlines, 4× MSAA, up to 120 Hz |
@@ -25,26 +30,22 @@ Cup emblem, sounds (synthesised at runtime), UI and rules. No third-party game a
 | **Bots** | Easy / Normal / Hard / Elite — behaviour only (reaction, aim, leading, dodging, spacing, targeting, supers) |
 | **Progression** | Levels 1–10 with linear, fully visible stat gains · Bolts (upgrades) · Prisms (shop) · Cups · Cup Track rewards |
 | **Spark Drops** | Earned from your first three good finishes a day (a team win, or top 4 in Last Spark). Tap to charge one through six tiers — Scrap, Tuned, Charged, Overclocked, Prismatic, Ultra — then it bursts open: Bolts, Prisms, a colourway or a new fighter, never a duplicate. A drop can split into two, four or eight, and the pieces roll better than a plain one |
-| **Leaderboard** | A Cup ladder of 100. There is no online play yet, so the other 99 are simulated rivals whose Cups drift from day to day |
 | **Sound** | Music (a sixteen-bar dark-electro lobby loop in four sections, plus separate victory and defeat themes) and every effect are designed in code by a small synth (`audio/SfxSynth.kt`): band-limited oscillators, FM bells, filtered noise, drive, echo and reverb |
 | **Shop** | Daily free gift · fighter unlocks · Bolt supplies · colourways · **Offer Creator**: design your own deals (bundle contents, price in Bolts/Prisms/free, discount display, expiry, purchase limit, colour theme) |
 | **Menus** | A live 3D lobby behind every screen (camera glides between shots), your fighter on a pedestal you can spin, 3D portraits, mode picker |
 | **Settings** | Bot difficulty, player name, control size/opacity/mode, auto-aim, volume/mute, haptics, frame rate, damage numbers, FPS, reset |
-| **Persistence** | Everything above is saved to a JSON file and survives restarts; with the server running, a copy is kept there too |
+| **Persistence** | Everything above is saved to a JSON file on the device and survives restarts |
 
 ## Layout
 
 | | |
 |---|---|
-| [`client/`](client) | The Android game: Kotlin, Jetpack Compose menus, a custom OpenGL ES 3.0 renderer |
-| [`server/`](server) | The game server: Python (standard library only) with a SQLite database. See [server/README.md](server/README.md) |
+| [`client/`](client) | The Android game: Kotlin, Jetpack Compose menus, a custom OpenGL ES 3.0 renderer. Nothing else is needed to run it |
 
-The server is in charge of what matters: it keeps each player's Cups, Spark Drops, Bolts, Prisms and fighters,
-referees every match (it replays the match from the player's inputs and the result is its own), works out what
-a match is worth, rolls what comes out of a drop, runs the shop and its deals, sets how tough the bots are,
-decides who gets the debug menu, and turns away versions that are no longer supported. If it can't be
-reached, the game offers offline mode after a minute of trying: every mode still plays against bots, as
-practice, and nothing is earned or spent until you are back online.
+What is earned, spent, upgraded, claimed or opened is decided by pure functions in
+[`data/Economy.kt`](client/app/src/main/java/io/github/projectwip/data/Economy.kt) (with the Cups each mode pays in
+`Trophies` and the Spark Pass in `SparkPass`), applied to the save by `GameRepository` and `LocalGame`. The
+Developer tab in Settings switches on a debug menu with drop luck, upgrade cost and hand-outs.
 
 ## Build & run
 
@@ -81,13 +82,8 @@ Almost every number lives in two files:
 Bot behaviour per difficulty: [`ai/BotProfile.kt`](client/app/src/main/java/io/github/projectwip/ai/BotProfile.kt).
 The arena is ASCII: edit the quadrant in [`sim/Arena.kt`](client/app/src/main/java/io/github/projectwip/sim/Arena.kt).
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the pieces fit together.
-
 ## Roadmap (not promises)
 
-* **Online play.** The simulation is deterministic-friendly, fixed-step and has no Android dependencies, and humans
-  and bots already drive fighters through the same `Control` input. That is the foundation for an authoritative
-  server later (server runs `World`, clients send `Control`s); bots would keep filling empty slots.
 * Layout editor for the touch controls, more fighters/arenas, music.
 
 ## License

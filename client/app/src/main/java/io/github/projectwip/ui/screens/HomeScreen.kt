@@ -79,8 +79,7 @@ fun HomeScreen(
     @Suppress("UNUSED_PARAMETER") showReward: (RewardReveal) -> Unit, openCapsule: () -> Unit,
 ) {
     val ui = LocalUi.current
-    val serverStatus = io.github.projectwip.ui.LocalServer.current?.status?.collectAsState()?.value
-    val online = serverStatus?.online == true
+    val account = io.github.projectwip.ui.rememberAccount(save)
     val prog = save.progress(save.selectedFighter)
     val canUpgradeAny = Balance.fighters.any { Progression.canUpgrade(save, it.id) }
     val claimable = Progression.claimable(save).size
@@ -96,16 +95,6 @@ fun HomeScreen(
             Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 ProfileAndCups(save, claimable) { go(Screen.CupTrack) }
                 Spacer(Modifier.width(10.dp))
-                // The player's place among the real accounts on the server; unknown while offline.
-                val status = io.github.projectwip.ui.LocalServer.current?.status?.collectAsState()?.value
-                val rank = status?.account?.takeIf { status.online }?.rank?.toString() ?: "?"
-                ChunkyButton({ go(Screen.Leaderboard) }, Modifier.size(104.dp, 58.dp), ButtonStyle.GLASS, lip = 4.dp) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        GameText("#$rank", Type.Heading, color = Palette.Gold, outline = 2.5.dp)
-                        PlainText("LEADERBOARD", Type.Small, color = Color.White, maxLines = 1)
-                    }
-                }
-                Spacer(Modifier.width(6.dp))
                 ChunkyButton({ go(Screen.News) }, Modifier.size(58.dp, 58.dp), ButtonStyle.GLASS, lip = 4.dp) {
                     GameText("NEWS", Type.Label, color = Palette.Cyan, outline = 2.dp)
                 }
@@ -137,7 +126,7 @@ fun HomeScreen(
                     Spacer(Modifier.height(10.dp))
                     // ---------------- bottom left: the Spark Pass, and the Spark Road beside it
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        PassButton(serverStatus?.account?.takeIf { online }?.pass, Modifier.width(if (ui.wide) 220.dp else 190.dp)) { go(Screen.Pass) }
+                        PassButton(account.pass, Modifier.width(if (ui.wide) 220.dp else 190.dp)) { go(Screen.Pass) }
                         RoadButton(save, Modifier.width(if (ui.wide) 220.dp else 190.dp)) { go(Screen.Road) }
                     }
                 }
@@ -149,29 +138,13 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.Bottom,
                     horizontalAlignment = Alignment.End,
                 ) {
-                    // Boss Mode or 3v3 with one or two real players, by team code.
-                    ChunkyButton({ go(Screen.Team) }, Modifier.fillMaxWidth().height(50.dp), ButtonStyle.GLASS, lip = 4.dp) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            GameIcon(IconKind.FIGHTERS, Modifier.size(24.dp))
-                            Spacer(Modifier.width(8.dp))
-                            GameText("TEAM UP", Type.Heading, color = Palette.Positive, outline = 2.5.dp)
-                            PlainText("  ·  play with friends", Type.Small, color = Color.White, maxLines = 1)
-                        }
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    CapsuleButton(if (save.settings.debugInfiniteCapsules) Int.MAX_VALUE else save.capsules, Progression.capsulesLeftToday(save, repo.today), online, openCapsule)
+                    CapsuleButton(if (save.settings.debugInfiniteCapsules) Int.MAX_VALUE else save.capsules, Progression.capsulesLeftToday(save, repo.today), openCapsule)
                     Spacer(Modifier.height(10.dp))
                     ModeChip(save.selectedMode, save.settings.botDifficulty) { picking = true }
                     Spacer(Modifier.height(12.dp))
                     PlayButton { go(Screen.Match(startMatchConfig(save))) }
                 }
             }
-        }
-
-        // The server's notice, across the top. It steps aside for the mode picker.
-        val notice = serverStatus?.notice.orEmpty()
-        if (online && notice.isNotBlank() && !picking) {
-            Badge(notice.take(90), Modifier.align(Alignment.TopCenter).padding(top = 74.dp), color = Palette.CyanDeep)
         }
 
         androidx.activity.compose.BackHandler(enabled = picking) { picking = false }
@@ -259,10 +232,9 @@ private fun NamePlate(save: SaveData, onClick: () -> Unit) {
     }
 }
 
-/** Spark Capsules waiting to be opened, or how to earn the next one. The server earns and opens them, so offline they wait. */
 /** The way into the Spark Pass: the tier the player is on, the bar toward the next, and a badge when a reward is waiting. */
 @Composable
-private fun PassButton(pass: io.github.projectwip.data.PassState?, modifier: Modifier, onClick: () -> Unit) {
+private fun PassButton(pass: io.github.projectwip.data.PassState, modifier: Modifier, onClick: () -> Unit) {
     Box(modifier) {
         ChunkyButton(onClick, Modifier.fillMaxWidth().height(58.dp), ButtonStyle.GLASS, cut = 14.dp, lip = 4.dp, sound = Sound.UI_OPEN) {
             Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -270,15 +242,12 @@ private fun PassButton(pass: io.github.projectwip.data.PassState?, modifier: Mod
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
                     GameText("SPARK PASS", Type.Label, color = Palette.Gold, outline = 2.dp)
-                    if (pass == null) PlainText("Tiers of rewards, online", Type.Small, color = Color.White, maxLines = 1)
-                    else {
-                        PlainText("Tier ${pass.reached} of ${pass.tiers.size}", Type.Small, color = Color.White, maxLines = 1)
-                        ProgressBar(if (pass.reached >= pass.tiers.size) 1f else (pass.points % pass.tierPoints).toFloat() / pass.tierPoints, Modifier.fillMaxWidth(), Palette.Gold, 9.dp)
-                    }
+                    PlainText("Tier ${pass.reached} of ${pass.tiers.size}", Type.Small, color = Color.White, maxLines = 1)
+                    ProgressBar(if (pass.reached >= pass.tiers.size) 1f else (pass.points % pass.tierPoints).toFloat() / pass.tierPoints, Modifier.fillMaxWidth(), Palette.Gold, 9.dp)
                 }
             }
         }
-        val waiting = pass?.claimable ?: 0
+        val waiting = pass.claimable
         if (waiting > 0) Badge(waiting.toString(), Modifier.align(Alignment.TopEnd).offset(x = 8.dp, y = (-8).dp))
     }
 }
@@ -314,7 +283,7 @@ private fun RoadButton(save: SaveData, modifier: Modifier, onClick: () -> Unit) 
 }
 
 @Composable
-private fun CapsuleButton(count: Int, leftToday: Int, online: Boolean, onOpen: () -> Unit) {
+private fun CapsuleButton(count: Int, leftToday: Int, onOpen: () -> Unit) {
     Box {
         ChunkyButton(onOpen, Modifier.fillMaxWidth().height(62.dp), ButtonStyle.CYAN, enabled = count > 0, cut = 14.dp, lip = 4.dp) {
             Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -326,7 +295,6 @@ private fun CapsuleButton(count: Int, leftToday: Int, online: Boolean, onOpen: (
                     GameText(if (count > 0) "OPEN DROP" else "SPARK DROPS", Type.Heading, outline = 2.5.dp)
                     PlainText(
                         when {
-                            !online -> if (count > 0) "Opens when you're back online" else "Earned and opened online"
                             count > 0 -> "Tap it to charge it up"
                             leftToday > 0 -> "Win or top 4 earns one · $leftToday left today"
                             else -> "Today's are all earned · more tomorrow"
@@ -345,9 +313,9 @@ private fun CapsuleButton(count: Int, leftToday: Int, online: Boolean, onOpen: (
 
 // ---------------------------------------------------------------------------------------------- mode
 
-fun modeIcon(m: GameMode) = when (m) { GameMode.LAST_SPARK -> IconKind.SPARK; GameMode.KNOCKOUT_RUSH -> IconKind.SWORDS; GameMode.BOSS -> IconKind.SKULL; GameMode.TRAINING -> IconKind.FIGHTERS; GameMode.DUEL -> IconKind.SWORDS }
+fun modeIcon(m: GameMode) = when (m) { GameMode.LAST_SPARK -> IconKind.SPARK; GameMode.KNOCKOUT_RUSH -> IconKind.SWORDS; GameMode.BOSS -> IconKind.SKULL; GameMode.TRAINING -> IconKind.FIGHTERS }
 
-fun arenaFor(m: GameMode): Arena = when (m) { GameMode.LAST_SPARK -> Arenas.staticCanyon(); GameMode.KNOCKOUT_RUSH -> Arenas.foundryYard(); GameMode.BOSS -> Arenas.provingGround(); GameMode.TRAINING -> Arenas.trainingArea(); GameMode.DUEL -> Arenas.provingGround() }
+fun arenaFor(m: GameMode): Arena = when (m) { GameMode.LAST_SPARK -> Arenas.staticCanyon(); GameMode.KNOCKOUT_RUSH -> Arenas.foundryYard(); GameMode.BOSS -> Arenas.provingGround(); GameMode.TRAINING -> Arenas.trainingArea() }
 
 @Composable
 private fun ModeChip(mode: GameMode, d: BotDifficulty?, onClick: () -> Unit) {
@@ -358,8 +326,7 @@ private fun ModeChip(mode: GameMode, d: BotDifficulty?, onClick: () -> Unit) {
             Column(Modifier.weight(1f)) {
                 GameText(mode.title.uppercase(), Type.Heading, color = Palette.Gold, outline = 2.5.dp)
                 PlainText(mode.tagline, Type.Small, maxLines = 1)
-                if (mode == GameMode.DUEL) PlainText("Against a real player", Type.Small, color = Palette.Positive)
-                else if (d != null) Row(verticalAlignment = Alignment.CenterVertically) {
+                if (d != null) Row(verticalAlignment = Alignment.CenterVertically) {
                     PlainText("Bots: ", Type.Small)
                     PlainText(d.label, Type.Label, color = difficultyColor(d))
                 }
@@ -372,7 +339,6 @@ private fun ModeChip(mode: GameMode, d: BotDifficulty?, onClick: () -> Unit) {
 @Composable
 private fun ModePicker(save: SaveData, repo: GameRepository, onClose: () -> Unit) {
     val ui = LocalUi.current
-    val ask = io.github.projectwip.ui.LocalServerCall.current
     Box(
         Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f))
             .clickable(remember { MutableInteractionSource() }, null, onClick = onClose),
@@ -404,8 +370,7 @@ private fun ModePicker(save: SaveData, repo: GameRepository, onClose: () -> Unit
                     Spacer(Modifier.width(6.dp))
                     for (d in BotDifficulty.entries) {
                         val sel = d == save.settings.botDifficulty
-                        // The server has to agree; its answer (the approved difficulty) is what gets shown.
-                        ChunkyButton({ ask({ setDifficulty(d) }) }, Modifier.size(118.dp, 50.dp),
+                        ChunkyButton({ repo.updateSettings { it.copy(botDifficulty = d) } }, Modifier.size(118.dp, 50.dp),
                             if (sel) ButtonStyle.ORANGE else ButtonStyle.PURPLE, lip = 4.dp, sound = Sound.UI_SELECT) {
                             GameText(d.label.uppercase(), Type.Label, color = if (sel) Color.White else difficultyColor(d), outline = 2.dp)
                         }
@@ -460,7 +425,6 @@ private fun ModeCard(m: GameMode, selected: Boolean, modifier: Modifier, showMap
                     GameMode.LAST_SPARK -> "Break crates for Power Cells. Outlast the Static Storm. The higher you finish, the more Cups."
                     GameMode.KNOCKOUT_RUSH -> "Respawns on. Your team starts at the bottom. Win to earn Cups."
                     GameMode.BOSS -> "One of three bosses, each with moves of its own: rockets, sweeping beams, charges. Watch the marked ground. Knock it out to win; you have unlimited lives. Win to earn Cups."
-                    GameMode.DUEL -> "Against one real player on this server, each on their own device. First to 3 knockouts, played for Cups. Leaving a match counts as a defeat."
                     GameMode.TRAINING -> "Four dummies, a swarm of minis and a boss that never move or attack, plus one sentry gun that does shoot. No timer, no rewards: leave whenever you like."
                 },
                 Type.Small, color = if (selected) Color.White else Palette.TextDim, align = TextAlign.Center, maxLines = 5,

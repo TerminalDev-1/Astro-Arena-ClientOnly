@@ -47,8 +47,7 @@ import io.github.projectwip.ui.FighterView
 import io.github.projectwip.ui.GameIcon
 import io.github.projectwip.ui.GameText
 import io.github.projectwip.ui.IconKind
-import io.github.projectwip.ui.LocalServer
-import io.github.projectwip.ui.LocalServerCall
+import io.github.projectwip.ui.LocalGameCall
 import io.github.projectwip.ui.LocalUi
 import io.github.projectwip.ui.Palette
 import io.github.projectwip.ui.Panel
@@ -86,7 +85,7 @@ fun ProgressBar(fraction: Float, modifier: Modifier = Modifier, color: Color = C
  */
 @Composable
 fun RoadScreen(save: SaveData, go: (Screen) -> Unit, showReward: (RewardReveal) -> Unit) {
-    val ask = LocalServerCall.current
+    val ask = LocalGameCall.current
     val ui = LocalUi.current
     val next = SparkRoad.next(save)
     val stopW = if (ui.roomy) 190.dp else 158.dp
@@ -207,26 +206,18 @@ private fun RoadStop(id: FighterId, width: Dp, lit: Float, unlocked: Boolean, is
 
 /**
  * The Spark Pass: a season of tiers. Playing matches earns pass points, each tier reached has a reward to claim
- * (most of them Credits), and a new season starts everyone again. The server keeps all of it; this shows what
- * the account says.
+ * (most of them Credits), and a new season starts everyone again.
  */
 @Composable
 fun PassScreen(save: SaveData, go: (Screen) -> Unit, showReward: (RewardReveal) -> Unit) {
-    val ask = LocalServerCall.current
+    val ask = LocalGameCall.current
     val ui = LocalUi.current
-    val status = LocalServer.current?.status?.collectAsState()?.value
-    val pass = status?.account?.takeIf { status.online }?.pass
+    val pass = io.github.projectwip.ui.rememberAccount(save).pass
     Box(Modifier.fillMaxSize()) {
         io.github.projectwip.ui.LobbyShotEffect(io.github.projectwip.render3d.LobbyShot.BACKDROP)
         Box(Modifier.fillMaxSize().background(SCRIM))
         Column(Modifier.fillMaxSize()) {
             ScreenHeader("SPARK PASS", { go(Screen.Home) }, save.bolts, save.prisms)
-            if (pass == null || pass.tiers.isEmpty()) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    PlainText("The Spark Pass is kept by the server. It will be here when you're back online.", Type.Body, align = TextAlign.Center)
-                }
-                return@Column
-            }
             PassProgress(pass, Modifier.fillMaxWidth().padding(horizontal = 22.dp))
             val list = rememberLazyListState()
             LaunchedEffect(Unit) {

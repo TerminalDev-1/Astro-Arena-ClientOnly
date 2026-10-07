@@ -183,7 +183,7 @@ private fun FighterPage(save: SaveData, repo: GameRepository, id: FighterId, go:
     var moment by remember { mutableStateOf<UpgradeMoment?>(null) }
     val ui = LocalUi.current
     val sfx = LocalSfx.current
-    val ask = io.github.projectwip.ui.LocalServerCall.current
+    val ask = io.github.projectwip.ui.LocalGameCall.current
     val def = Balance.fighter(id)
     val prog = save.progress(id)
     val capped = Progression.levelCapped(save, def.id)

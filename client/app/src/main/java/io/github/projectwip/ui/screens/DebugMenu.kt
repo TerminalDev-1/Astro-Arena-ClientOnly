@@ -69,23 +69,13 @@ fun DebugMenu(save: SaveData, repo: GameRepository, onClose: () -> Unit) {
 @Composable
 fun DebugControls(save: SaveData, repo: GameRepository) {
     val s = save.settings
-    val ask = io.github.projectwip.ui.LocalServerCall.current
+    val ask = io.github.projectwip.ui.LocalGameCall.current
     // The slider's own position while it is being dragged, so the number and the odds follow the thumb;
     // the save is only written when it is let go.
     var luck by remember { mutableFloatStateOf(s.debugLuck) }
     var costFactor by remember { mutableFloatStateOf(s.debugUpgradeCost) }
     fun snap(v: Float) = (v * 10).toInt() / 10f
-    val server = io.github.projectwip.ui.LocalServer.current
-    val status = server?.status?.collectAsState()?.value
-    // Everything these cheats touch is the server's, so they only work if it lists this player as a developer.
-    val trusted = status?.online == true && status.account?.developer == true
     SectionTitle("DEBUG MENU", "Cheats for trying things out. They change your real save.")
-    if (!trusted) PlainText(
-        if (status?.online != true) "Offline: everything in this menu needs the server."
-        else "The server doesn't list you as a developer, so it ignores everything in this menu. " +
-            "Add your player ID (${server?.playerId ?: "see Settings > Data"}) to game.cfg on the server.",
-        Type.Body, color = io.github.projectwip.ui.Palette.Gold,
-    )
     ToggleRow("INFINITE DROPS", "The drop button always works and opening one never uses it up.", s.debugInfiniteCapsules) { v ->
         repo.updateSettings { it.copy(debugInfiniteCapsules = v) }
     }
